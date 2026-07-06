@@ -1,0 +1,1785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cartograph — Knowledge Graph Explorer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #07090d;
+    --bg-glow-1: rgba(56, 130, 116, 0.10);
+    --bg-glow-2: rgba(78, 98, 148, 0.09);
+    --panel: rgba(16, 20, 27, 0.78);
+    --panel-solid: #12161d;
+    --panel-raised: #1a1f28;
+    --border: rgba(90, 110, 140, 0.18);
+    --border-bright: rgba(120, 145, 180, 0.32);
+    --text: #dce3ec;
+    --text-dim: #8b96a7;
+    --text-faint: #525c6d;
+    --accent: #5fd4bc;
+    --accent-dim: #2e7a6a;
+    --accent-glow: rgba(95, 212, 188, 0.14);
+    --warn: #e0b168;
+    --danger: #e07a68;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif;
+
+    --node-controller: #5fd4bc;
+    --node-service: #74a8e8;
+    --node-repository: #e0b168;
+    --node-entity: #e08fb8;
+    --node-external: #e07a68;
+    --node-topic: #cfe068;
+    --node-config: #7d8798;
+    --node-plain: #596472;
+    --impact-up: #b98ee6;
+    --impact-down: #e2924f;
+
+    --shadow-lg: 0 18px 50px rgba(0,0,0,0.55);
+    --radius: 14px;
+    --radius-sm: 9px;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f5;
+    --bg-glow-1: rgba(31, 125, 108, 0.07);
+    --bg-glow-2: rgba(80, 100, 150, 0.07);
+    --panel: rgba(255, 255, 255, 0.82);
+    --panel-solid: #ffffff;
+    --panel-raised: #e6eaf0;
+    --border: rgba(60, 80, 110, 0.16);
+    --border-bright: rgba(60, 80, 110, 0.30);
+    --text: #171c25;
+    --text-dim: #596472;
+    --text-faint: #9aa3b0;
+    --accent: #157a68;
+    --accent-dim: #9fd8cc;
+    --accent-glow: rgba(21, 122, 104, 0.1);
+    --warn: #9c6a1d;
+    --danger: #b5462f;
+    --node-controller: #0f8a70;
+    --node-service: #2f6dc2;
+    --node-repository: #a8781c;
+    --node-entity: #bb4f86;
+    --node-external: #c05138;
+    --node-topic: #7f9312;
+    --node-config: #6b7686;
+    --node-plain: #8a95a3;
+    --impact-up: #7d4bb8;
+    --impact-down: #b8611f;
+    --shadow-lg: 0 18px 50px rgba(30,40,60,0.16);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eef1f5;
+      --bg-glow-1: rgba(31, 125, 108, 0.07);
+      --bg-glow-2: rgba(80, 100, 150, 0.07);
+      --panel: rgba(255, 255, 255, 0.82);
+      --panel-solid: #ffffff;
+      --panel-raised: #e6eaf0;
+      --border: rgba(60, 80, 110, 0.16);
+      --border-bright: rgba(60, 80, 110, 0.30);
+      --text: #171c25;
+      --text-dim: #596472;
+      --text-faint: #9aa3b0;
+      --accent: #157a68;
+      --accent-dim: #9fd8cc;
+      --accent-glow: rgba(21, 122, 104, 0.1);
+      --warn: #9c6a1d;
+      --danger: #b5462f;
+      --node-controller: #0f8a70;
+      --node-service: #2f6dc2;
+      --node-repository: #a8781c;
+      --node-entity: #bb4f86;
+      --node-external: #c05138;
+      --node-topic: #7f9312;
+      --node-config: #6b7686;
+      --node-plain: #8a95a3;
+      --impact-up: #7d4bb8;
+      --impact-down: #b8611f;
+      --shadow-lg: 0 18px 50px rgba(30,40,60,0.16);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px;
+    overflow: hidden;
+  }
+  ::selection { background: var(--accent-glow); }
+
+  /* ================= full-page graph layer (the home page) ================= */
+  #graph-layer { position: fixed; inset: 0; z-index: 1; }
+  #graph-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  #graph-canvas.grabbing { cursor: grabbing; }
+
+  /* ================= floating header ================= */
+  header {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px;
+    padding: 9px 14px; z-index: 30;
+    background: var(--panel); backdrop-filter: blur(18px);
+    border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    max-width: calc(100vw - 28px);
+  }
+  header .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-weight: 700; font-size: 13.5px;
+    color: var(--text); white-space: nowrap;
+  }
+  header .brand .logo {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), var(--node-service));
+    display: grid; place-items: center;
+    color: #07090d; font-size: 12px; font-weight: 800;
+  }
+  header .brand .svc { color: var(--text-faint); font-weight: 400; }
+  header .brand .svc b { color: var(--accent); font-weight: 600; }
+
+  .tabs {
+    display: flex; gap: 2px; background: rgba(0,0,0,0.16);
+    border: 1px solid var(--border); border-radius: 10px; padding: 3px;
+  }
+  :root[data-theme="light"] .tabs { background: rgba(255,255,255,0.4); }
+  .tab-btn {
+    background: none; border: none; border-radius: 7px;
+    padding: 6px 13px; font-family: var(--mono); font-size: 12px;
+    color: var(--text-dim); cursor: pointer; white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); background: var(--panel-solid); box-shadow: 0 1px 5px rgba(0,0,0,0.35); }
+  .tab-btn .key {
+    margin-left: 6px; font-size: 9px; color: var(--text-faint);
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px;
+  }
+
+  .palette-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,0.16); border: 1px solid var(--border);
+    color: var(--text-faint); padding: 7px 12px; border-radius: 10px;
+    font-family: var(--mono); font-size: 12px; cursor: pointer; min-width: 200px;
+    transition: border-color 0.15s;
+  }
+  :root[data-theme="light"] .palette-btn { background: rgba(255,255,255,0.4); }
+  .palette-btn:hover { border-color: var(--border-bright); color: var(--text-dim); background: var(--panel-raised); }
+  .palette-btn .kbd {
+    margin-left: auto; font-size: 10px; border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 5px;
+  }
+  .icon-btn {
+    background: rgba(0,0,0,0.16); border: 1px solid var(--border);
+    color: var(--text-dim); width: 33px; height: 33px; border-radius: 10px;
+    cursor: pointer; display: grid; place-items: center;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  :root[data-theme="light"] .icon-btn { background: rgba(255,255,255,0.4); }
+  .icon-btn:hover { border-color: var(--border-bright); color: var(--text); background: var(--panel-raised); }
+  .icon-btn svg, .palette-btn svg, .drawer-close svg, .detail-actions svg { display: block; }
+  .icon-btn .sun { display: none; }
+  .icon-btn .moon { display: block; }
+  :root[data-theme="light"] .icon-btn .sun { display: block; }
+  :root[data-theme="light"] .icon-btn .moon { display: none; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .icon-btn .sun { display: block; }
+    :root:not([data-theme="dark"]) .icon-btn .moon { display: none; }
+  }
+
+  /* ================= floating graph HUD ================= */
+  .graph-controls {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+    padding: 9px 14px; z-index: 25;
+    background: var(--panel); backdrop-filter: blur(18px);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    font-family: var(--mono); font-size: 12px;
+    max-width: calc(100vw - 28px);
+  }
+  .graph-controls select, .graph-controls button {
+    background: rgba(0,0,0,0.18); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 11.5px; padding: 6px 11px; border-radius: 8px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  :root[data-theme="light"] .graph-controls select, :root[data-theme="light"] .graph-controls button { background: rgba(255,255,255,0.4); }
+  .graph-controls button:hover, .graph-controls select:hover { border-color: var(--border-bright); background: var(--panel-raised); }
+  .graph-controls button.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-glow); }
+  .graph-controls .divider { width: 1px; height: 20px; background: var(--border); }
+  .legend { display: flex; gap: 11px; align-items: center; padding: 0 4px; }
+  .legend .item { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 10.5px; }
+  .legend .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  .graph-stats {
+    position: fixed; top: 82px; left: 18px; z-index: 20;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; font-family: var(--mono); font-size: 11.5px;
+    color: var(--text-dim); line-height: 2; box-shadow: var(--shadow-lg);
+  }
+  .graph-stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .graph-stats .row { display: flex; justify-content: space-between; gap: 18px; }
+  .graph-stats .row .val { color: var(--text); font-variant-numeric: tabular-nums; }
+  .graph-stats .swatch { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; }
+
+  .graph-hint {
+    position: fixed; bottom: 18px; right: 18px; z-index: 20;
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-faint);
+    background: var(--panel); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px;
+    line-height: 1.9; text-align: right;
+  }
+  #graph-truncation-note {
+    position: fixed; top: 82px; right: 18px; z-index: 20;
+    font-family: var(--mono); font-size: 10.5px; color: var(--warn);
+    background: var(--panel); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: 10px; padding: 7px 11px;
+  }
+
+  .graph-tooltip {
+    position: absolute; pointer-events: none;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--border-bright); border-radius: 10px; padding: 9px 12px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--text); display: none; z-index: 24;
+    max-width: 330px; box-shadow: var(--shadow-lg);
+  }
+  .graph-tooltip .t { color: var(--accent); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+
+  /* in-graph drawer */
+  #graph-drawer {
+    position: fixed; top: 74px; right: 14px; bottom: 76px; width: 360px; z-index: 26;
+    background: var(--panel); backdrop-filter: blur(20px);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    transform: translateX(calc(100% + 20px)); transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.25, 1);
+    overflow-y: auto; padding: 46px 18px 18px; box-shadow: var(--shadow-lg);
+  }
+  #graph-drawer.open { transform: translateX(0); }
+  #graph-drawer .drawer-close {
+    position: absolute; top: 12px; right: 12px;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
+    display: grid; place-items: center;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #graph-drawer .drawer-close:hover { color: var(--text); border-color: var(--border-bright); }
+  .drawer-nav { position: absolute; top: 12px; left: 14px; display: flex; gap: 4px; }
+  .drawer-nav-btn {
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
+    display: grid; place-items: center; transition: border-color 0.15s, color 0.15s;
+  }
+  .drawer-nav-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-bright); }
+  .drawer-nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+  /* ================= overlays (dashboard / explorer) ================= */
+  .overlay {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    padding-top: 72px;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(20px);
+  }
+  .overlay.open { display: block; }
+
+  #view-dashboard .dash-scroll { height: calc(100vh - 72px); overflow-y: auto; }
+  .dash-wrap { max-width: 1180px; margin: 0 auto; padding: 22px 32px 70px; }
+
+  .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+  .hero h1 { font-size: 25px; font-weight: 700; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+  .hero h1 .svc-name { color: var(--accent); font-family: var(--mono); }
+  .hero .sub { color: var(--text-dim); font-size: 13.5px; margin-top: 6px; max-width: 62ch; line-height: 1.55; }
+  .hero .meta { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); text-align: right; line-height: 1.8; white-space: nowrap; }
+
+  .layer-strip {
+    display: flex; align-items: stretch; margin-bottom: 22px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow-x: auto;
+  }
+  .layer-cell { flex: 1; min-width: 128px; padding: 15px 18px; position: relative; cursor: pointer; transition: background 0.15s; }
+  .layer-cell:hover { background: var(--panel-raised); }
+  .layer-cell + .layer-cell { border-left: 1px solid var(--border); }
+  .layer-cell .n { font-family: var(--mono); font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .layer-cell .l { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); margin-top: 3px; }
+  .layer-cell .flow-arrow {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    z-index: 2; color: var(--text-faint); font-size: 12px;
+    background: var(--panel-solid); border: 1px solid var(--border);
+    border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center;
+  }
+
+  .dash-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .dash-columns { grid-template-columns: 1fr; } }
+  .dash-section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .dash-section.span-2 { grid-column: 1 / -1; }
+  .dash-section h2 {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-dim); font-weight: 600; margin: 0;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .dash-section h2 .count-pill { font-size: 10px; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; color: var(--text-faint); }
+  .dash-section h2 .dot { width: 7px; height: 7px; border-radius: 3px; }
+  .dash-list { max-height: 400px; overflow-y: auto; }
+  .dash-row {
+    display: grid; grid-template-columns: 60px 1fr auto; gap: 12px; align-items: center;
+    padding: 9px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12.5px; cursor: pointer; transition: background 0.12s;
+  }
+  .dash-row:last-child { border-bottom: none; }
+  .dash-row:hover { background: var(--panel-raised); }
+  .verb { font-size: 10px; font-weight: 700; padding: 3px 0; border-radius: 5px; text-align: center; letter-spacing: 0.04em; }
+  .verb-GET { color: var(--node-service); background: color-mix(in srgb, var(--node-service) 15%, transparent); }
+  .verb-POST { color: var(--node-controller); background: color-mix(in srgb, var(--node-controller) 15%, transparent); }
+  .verb-PUT { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+  .verb-DELETE { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+  .verb-PATCH { color: var(--node-entity); background: color-mix(in srgb, var(--node-entity) 15%, transparent); }
+  .dash-row .path { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dash-row .sub { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+  .dash-empty { padding: 20px 16px; color: var(--text-faint); font-family: var(--mono); font-size: 12px; }
+
+  /* explorer overlay */
+  #view-explorer .explorer-grid {
+    display: grid; grid-template-columns: 250px 1fr 380px;
+    height: calc(100vh - 72px);
+    max-width: 1400px; margin: 0 auto;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0; overflow: hidden;
+  }
+  nav.types { border-right: 1px solid var(--border); overflow-y: auto; padding: 12px 0; }
+  .type-group-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); padding: 10px 16px 6px; }
+  .type-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); border-left: 2px solid transparent; transition: background 0.12s; }
+  .type-row:hover { background: var(--panel-raised); color: var(--text); }
+  .type-row.active { background: var(--accent-glow); color: var(--accent); border-left-color: var(--accent); }
+  .type-row .count { font-variant-numeric: tabular-nums; color: var(--text-faint); font-size: 11px; }
+
+  main#node-list { overflow-y: auto; padding: 4px 0; }
+  .node-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: baseline; padding: 8px 16px; border-bottom: 1px solid var(--border); cursor: pointer; font-family: var(--mono); font-size: 12.5px; transition: background 0.12s; }
+  .node-row:hover { background: var(--panel-raised); }
+  .node-row.selected { background: var(--accent-glow); border-left: 2px solid var(--accent); padding-left: 14px; }
+  .node-row .badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+  .node-row .name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node-row .meta { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--text-faint); font-family: var(--mono); font-size: 12.5px; }
+
+  aside.detail { border-left: 1px solid var(--border); overflow-y: auto; padding: 18px; }
+  aside.detail .placeholder { color: var(--text-faint); font-family: var(--mono); font-size: 12.5px; margin-top: 40px; text-align: center; }
+
+  .detail-type { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px; }
+  .detail-name { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text); word-break: break-word; margin-bottom: 12px; padding-right: 26px; }
+  .detail-actions { display: flex; gap: 8px; margin-bottom: 4px; }
+  .detail-actions button {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    font-family: var(--mono); font-size: 11px; padding: 6px 11px; border-radius: 7px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .detail-actions button:hover { border-color: var(--border-bright); color: var(--text); }
+  .prov-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .prov-actions a, .prov-actions button {
+    display: flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); text-decoration: none;
+    background: var(--panel-raised); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 9px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .prov-actions a:hover, .prov-actions button:hover { border-color: var(--border-bright); color: var(--text); }
+  .prov-actions .copied { color: var(--accent) !important; border-color: var(--accent-dim) !important; }
+
+  .impact-summary { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 9px; padding: 11px 13px; margin-bottom: 14px; }
+  .impact-row { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; padding: 2px 0; }
+  .impact-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .impact-dot.up { background: var(--impact-up); }
+  .impact-dot.down { background: var(--impact-down); }
+  .impact-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
+  .impact-na { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); }
+  .detail-section-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 16px 0 6px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .attr-row { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; font-family: var(--mono); }
+  .attr-row .k { color: var(--text-faint); min-width: 100px; flex-shrink: 0; }
+  .attr-row .v { color: var(--text-dim); word-break: break-word; }
+  .prov-link { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; margin-top: 2px; }
+  .prov-link .file { color: var(--accent); }
+  .edge-list { display: flex; flex-direction: column; gap: 3px; }
+  .edge-item { display: flex; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
+  .edge-item:hover { background: var(--panel-raised); }
+  .edge-item .dir { color: var(--text-faint); width: 14px; text-align: center; flex-shrink: 0; }
+  .edge-item .etype { color: var(--warn); font-size: 10px; text-transform: uppercase; flex-shrink: 0; }
+  .edge-item .target { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ================= command palette ================= */
+  #palette-overlay {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    background: rgba(4, 6, 9, 0.6); backdrop-filter: blur(4px);
+    align-items: flex-start; justify-content: center; padding-top: 12vh;
+  }
+  #palette-overlay.open { display: flex; }
+  #palette {
+    width: min(620px, 92vw);
+    background: var(--panel-solid); border: 1px solid var(--border-bright);
+    border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  #palette input {
+    width: 100%; background: none; border: none; outline: none;
+    color: var(--text); font-family: var(--mono); font-size: 15px;
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+  }
+  #palette input::placeholder { color: var(--text-faint); }
+  #palette-results { max-height: 46vh; overflow-y: auto; padding: 6px; }
+  .palette-item {
+    display: grid; grid-template-columns: 84px 1fr auto; gap: 12px; align-items: center;
+    padding: 9px 12px; border-radius: 9px; cursor: pointer;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .palette-item .ptype { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
+  .palette-item .pname { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .palette-item .pmeta { color: var(--text-faint); font-size: 10.5px; }
+  .palette-item.active { background: var(--accent-glow); }
+  .palette-item.active .ptype { color: var(--accent); }
+  .palette-footer { display: flex; gap: 14px; padding: 9px 16px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .palette-footer .kbd { border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin-right: 4px; }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 5px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- full-page living graph = home -->
+<div id="graph-layer">
+  <canvas id="graph-canvas"></canvas>
+  <div class="graph-tooltip" id="graph-tooltip"></div>
+</div>
+
+<header>
+  <span class="brand"><span class="logo">C</span>Cartograph <span class="svc" id="brand-svc"></span></span>
+  <div class="tabs">
+    <button class="tab-btn active" data-view="graph">Graph<span class="key">1</span></button>
+    <button class="tab-btn" data-view="dashboard">Dashboard<span class="key">2</span></button>
+    <button class="tab-btn" data-view="explorer">Explorer<span class="key">3</span></button>
+  </div>
+  <button class="palette-btn" id="open-palette">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span>Jump to anything…</span><span class="kbd">Ctrl K</span>
+  </button>
+  <button class="icon-btn" id="theme-toggle" title="Toggle light/dark theme">
+    <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8"/></svg>
+    <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
+  </button>
+</header>
+
+<div class="graph-stats" id="graph-stats"></div>
+
+<div class="graph-controls">
+  <select id="graph-scope">
+    <option value="all">Whole system</option>
+    <option value="controllers">Controllers → Services</option>
+    <option value="services">Services → Data/Clients</option>
+    <option value="external">External dependencies</option>
+  </select>
+  <button id="graph-reset" title="Re-run the layout simulation">Re-layout</button>
+  <button id="graph-center" title="Fit graph to view">Fit</button>
+  <label style="display:flex;align-items:center;gap:5px;color:var(--text-dim);cursor:pointer">
+    <input type="checkbox" id="graph-physics" checked style="accent-color:var(--accent)" /> physics
+  </label>
+  <div class="divider"></div>
+  <button id="impact-toggle" title="Trace what a change to the focused node would affect (downstream) and what depends on it (upstream)">Impact radius</button>
+  <select id="impact-depth" title="How many hops to trace" style="display:none">
+    <option value="1">1 hop</option>
+    <option value="2" selected>2 hops</option>
+    <option value="3">3 hops</option>
+    <option value="999">all hops</option>
+  </select>
+  <div class="divider"></div>
+  <div class="legend" id="graph-legend"></div>
+</div>
+
+<div class="graph-hint">
+  scroll zoom · drag pan · drag node to pin<br />
+  click = inspect · double-click = explorer · esc = close
+</div>
+
+<aside id="graph-drawer">
+  <div class="drawer-nav">
+    <button class="drawer-nav-btn" id="drawer-back" title="Back" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="drawer-nav-btn" id="drawer-forward" title="Forward" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <button class="drawer-close" id="drawer-close" title="Close (Esc)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+  </button>
+  <div id="drawer-content"></div>
+</aside>
+
+<!-- dashboard overlay -->
+<div class="overlay" id="view-dashboard">
+  <div class="dash-scroll"><div class="dash-wrap" id="dash-content"></div></div>
+</div>
+
+<!-- explorer overlay -->
+<div class="overlay" id="view-explorer">
+  <div class="explorer-grid">
+    <nav class="types" id="type-nav"></nav>
+    <main id="node-list"></main>
+    <aside class="detail" id="detail-panel">
+      <div class="placeholder">Select a node to inspect it.</div>
+    </aside>
+  </div>
+</div>
+
+<div id="palette-overlay">
+  <div id="palette">
+    <input type="text" id="palette-input" placeholder="Search classes, endpoints, topics, config…" autocomplete="off" />
+    <div id="palette-results"></div>
+    <div class="palette-footer">
+      <span><span class="kbd">↑↓</span>navigate</span>
+      <span><span class="kbd">↵</span>open</span>
+      <span><span class="kbd">esc</span>close</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/*__GRAPH_DATA__*/
+
+/* ============================== shared indices ============================== */
+const nodesById = new Map(GRAPH_DATA.nodes.map(n => [n.id, n]));
+const outgoing = new Map();
+const incoming = new Map();
+for (const e of GRAPH_DATA.edges) {
+  if (!outgoing.has(e.source)) outgoing.set(e.source, []);
+  if (!incoming.has(e.target)) incoming.set(e.target, []);
+  outgoing.get(e.source).push(e);
+  incoming.get(e.target).push(e);
+}
+const typeCounts = new Map();
+for (const n of GRAPH_DATA.nodes) typeCounts.set(n.type, (typeCounts.get(n.type) || 0) + 1);
+
+function stereotypeOf(n) { return (n.attributes && n.attributes.springStereotype) || null; }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+const ICON_GRAPH = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="6" r="2.6"/><circle cx="12" cy="18" r="2.6"/><line x1="8" y1="7.3" x2="10.3" y2="15.7"/><line x1="16" y1="7.3" x2="13.7" y2="15.7"/></svg>';
+const ICON_EXTERNAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>';
+const ICON_EDITOR = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+const ICON_COPY = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const ICON_MARKDOWN = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>';
+const ICON_LINK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+
+/** Best-effort "open in editor" deep link — works when VS Code is installed and its vscode:// protocol handler is registered (the common case for local dev). Absent repoRoot metadata (older exports), no link is offered. */
+function vscodeUri(provenance) {
+  const root = GRAPH_DATA.meta && GRAPH_DATA.meta.repoRoot;
+  if (!root || !provenance) return null;
+  const line = provenance.line >= 0 ? ":" + provenance.line : "";
+  return `vscode://file/${root}/${provenance.file}${line}`;
+}
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).catch(() => {});
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.classList.add("copied");
+  btn.innerHTML = "Copied";
+  setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = original; }, 1200);
+}
+
+/** Formats a node plus its immediate relationships as Markdown — meant for pasting into a PR
+ *  description, a Slack thread, or an AI chat when asking "explain this component". */
+function buildMarkdownContext(id) {
+  const node = nodesById.get(id);
+  if (!node) return "";
+  const lines = [`### ${node.name}`, `- **Type**: ${node.type}${stereotypeOf(node) ? " (" + stereotypeOf(node) + ")" : ""}`];
+  if (node.provenance) lines.push(`- **Location**: \`${node.provenance.file}${node.provenance.line >= 0 ? ":" + node.provenance.line : ""}\``);
+  const attrs = Object.entries(node.attributes || {}).filter(([k, v]) => v !== null && v !== undefined && String(v).length > 0);
+  if (attrs.length) {
+    lines.push(`- **Attributes**:`);
+    for (const [k, v] of attrs) lines.push(`  - ${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
+  }
+  const out = outgoing.get(id) || [], inc = incoming.get(id) || [];
+  if (out.length) {
+    lines.push(`- **Depends on / calls**:`);
+    for (const e of out) lines.push(`  - [${e.type}] ${(nodesById.get(e.target) || {}).name || e.target}`);
+  }
+  if (inc.length) {
+    lines.push(`- **Used by**:`);
+    for (const e of inc) lines.push(`  - [${e.type}] ${(nodesById.get(e.source) || {}).name || e.source}`);
+  }
+  return lines.join("\n");
+}
+
+const serviceName = (nodesById.get("CONFIG:spring.application.name") || {}).attributes?.value || null;
+if (serviceName) document.getElementById("brand-svc").innerHTML = "/ <b>" + escapeHtml(serviceName) + "</b>";
+
+/* ============================== theme ============================== */
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("cartograph-theme"); } catch (e) {}
+  if (saved) document.documentElement.dataset.theme = saved;
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    const cur = document.documentElement.dataset.theme
+      || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("cartograph-theme", next); } catch (e) {}
+  });
+})();
+function isDarkTheme() {
+  const t = document.documentElement.dataset.theme;
+  if (t) return t === "dark";
+  return !matchMedia("(prefers-color-scheme: light)").matches;
+}
+
+/* ============================== views ============================== */
+function switchTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  document.getElementById("view-dashboard").classList.toggle("open", name === "dashboard");
+  document.getElementById("view-explorer").classList.toggle("open", name === "explorer");
+  if (name === "graph") graphState.needsResize = true;
+}
+document.querySelectorAll(".tab-btn").forEach(btn =>
+  btn.addEventListener("click", () => switchTab(btn.dataset.view)));
+
+window.addEventListener("keydown", e => {
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }
+  if (typing) return;
+  if (e.key === "1") switchTab("graph");
+  if (e.key === "2") switchTab("dashboard");
+  if (e.key === "3") switchTab("explorer");
+  if (e.key === "Escape") {
+    if (paletteState.open) { closePalette(); return; }
+    if (document.getElementById("graph-drawer").classList.contains("open")) { closeDrawer(); return; }
+    switchTab("graph");
+  }
+});
+
+/* ============================== dashboard ============================== */
+function renderDashboard() {
+  const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
+  const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
+  const repositories = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "repository" || stereotypeOf(n) === "feignClient");
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+  const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
+  const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
+  const configProps = GRAPH_DATA.nodes.filter(n => n.type === "CONFIG_PROPERTY");
+  const classes = GRAPH_DATA.nodes.filter(n => n.type === "CLASS" || n.type === "INTERFACE");
+
+  const layers = [
+    { n: endpoints.length, l: "Endpoints", color: "--accent", type: "ENDPOINT" },
+    { n: controllers.length, l: "Controllers", color: "--node-controller", stereo: "controller" },
+    { n: services.length, l: "Services", color: "--node-service", stereo: "service" },
+    { n: repositories.length, l: "Repos & Clients", color: "--node-repository", stereo: "repository" },
+    { n: externals.length + tables.length + topics.length, l: "External Systems", color: "--node-external", type: "EXTERNAL_SERVICE" },
+  ];
+  const layerHtml = layers.map((x, i) => `
+    <div class="layer-cell" data-type="${x.type || ''}" data-stereo="${x.stereo || ''}">
+      <div class="n" style="color:var(${x.color})">${x.n.toLocaleString()}</div>
+      <div class="l">${x.l}</div>
+      ${i < layers.length - 1 ? '<span class="flow-arrow">→</span>' : ''}
+    </div>`).join("");
+
+  const verbOrder = { GET: 0, POST: 1, PUT: 2, PATCH: 3, DELETE: 4 };
+  const sortedEndpoints = [...endpoints].sort((a, b) => {
+    const va = verbOrder[a.attributes.httpMethod] ?? 9, vb = verbOrder[b.attributes.httpMethod] ?? 9;
+    return va - vb || a.attributes.path.localeCompare(b.attributes.path);
+  });
+  const endpointRows = sortedEndpoints.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb verb-${n.attributes.httpMethod}">${n.attributes.httpMethod}</span>
+      <span class="path">${escapeHtml(n.attributes.path)}</span>
+      <span class="sub">${escapeHtml((n.attributes.handlerClass || "").split(".").pop() || "")}.${escapeHtml(n.attributes.handlerMethod || "")}</span>
+    </div>`).join("") || `<div class="dash-empty">No REST endpoints detected.</div>`;
+
+  const extRows = externals.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-external);background:color-mix(in srgb, var(--node-external) 15%, transparent)">${n.type === 'DATABASE' ? 'DB' : 'HTTP'}</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${escapeHtml(n.attributes.via || n.attributes.declaredName || "")}</span>
+    </div>`).join("") || `<div class="dash-empty">No external dependencies detected.</div>`;
+
+  const topicRows = topics.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-topic);background:color-mix(in srgb, var(--node-topic) 15%, transparent)">TOPIC</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${(incoming.get(n.id)||[]).filter(e=>e.type==='PUBLISHES_TO').length} in · ${(outgoing.get(n.id)||[]).filter(e=>e.type==='LISTENS_TO').length} out</span>
+    </div>`).join("") || `<div class="dash-empty">No messaging topics/queues detected.</div>`;
+
+  const tableRows = tables.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-entity);background:color-mix(in srgb, var(--node-entity) 15%, transparent)">TABLE</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${(incoming.get(n.id)||[]).length} refs</span>
+    </div>`).join("") || `<div class="dash-empty">No JPA entities/tables detected.</div>`;
+
+  const controllerRows = controllers.map(n => {
+    const injected = GRAPH_DATA.edges.filter(e => e.type === "INJECTS" && e.source === n.id).length;
+    return `<div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-controller);background:color-mix(in srgb, var(--node-controller) 15%, transparent)">CTRL</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${injected} deps</span>
+    </div>`;
+  }).join("") || `<div class="dash-empty">No controllers detected.</div>`;
+
+  const svcRows = services.map(n => {
+    const injected = GRAPH_DATA.edges.filter(e => e.type === "INJECTS" && e.source === n.id).length;
+    const injectedBy = GRAPH_DATA.edges.filter(e => e.type === "INJECTS" && e.target === n.id).length;
+    return `<div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-service);background:color-mix(in srgb, var(--node-service) 15%, transparent)">SVC</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${injected} out · ${injectedBy} in</span>
+    </div>`;
+  }).join("") || `<div class="dash-empty">No services detected.</div>`;
+
+  document.getElementById("dash-content").innerHTML = `
+    <div class="hero">
+      <div>
+        <h1>${serviceName ? `<span class="svc-name">${escapeHtml(serviceName)}</span>` : "Service"} — architecture at a glance</h1>
+        <div class="sub">Auto-generated knowledge graph from static analysis — no AI, every fact traceable to file and line. Click anything to drill in, or press <b>Ctrl K</b> to jump straight to a class, endpoint, or config key.</div>
+      </div>
+      <div class="meta">
+        ${classes.length.toLocaleString()} classes · ${configProps.length.toLocaleString()} config keys<br />
+        graph: ${GRAPH_DATA.nodes.length.toLocaleString()} nodes / ${GRAPH_DATA.edges.length.toLocaleString()} edges
+      </div>
+    </div>
+    <div class="layer-strip">${layerHtml}</div>
+    <div class="dash-columns">
+      <div class="dash-section span-2">
+        <h2><span class="dot" style="background:var(--accent);color:var(--accent)"></span>REST Endpoints <span class="count-pill">${endpoints.length}</span></h2>
+        <div class="dash-list">${endpointRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-controller);color:var(--node-controller)"></span>Controllers <span class="count-pill">${controllers.length}</span></h2>
+        <div class="dash-list">${controllerRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-service);color:var(--node-service)"></span>Services <span class="count-pill">${services.length}</span></h2>
+        <div class="dash-list">${svcRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-external);color:var(--node-external)"></span>External Dependencies <span class="count-pill">${externals.length}</span></h2>
+        <div class="dash-list">${extRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-topic);color:var(--node-topic)"></span>Messaging <span class="count-pill">${topics.length}</span></h2>
+        <div class="dash-list">${topicRows}</div>
+      </div>
+      <div class="dash-section span-2">
+        <h2><span class="dot" style="background:var(--node-entity);color:var(--node-entity)"></span>Database Tables <span class="count-pill">${tables.length}</span></h2>
+        <div class="dash-list">${tableRows}</div>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll("#dash-content .dash-row[data-id]").forEach(row =>
+    row.addEventListener("click", () => { switchTab("explorer"); selectNode(row.dataset.id); }));
+  document.querySelectorAll("#dash-content .layer-cell").forEach(cell =>
+    cell.addEventListener("click", () => {
+      switchTab("explorer");
+      if (cell.dataset.stereo) applyExplorerStereotypeFilter(cell.dataset.stereo);
+      else if (cell.dataset.type) applyExplorerTypeFilter(cell.dataset.type);
+    }));
+}
+
+function renderGraphStats() {
+  const counts = [
+    ["--node-controller", "controllers", GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller").length],
+    ["--node-service", "services", GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service").length],
+    ["--node-repository", "repos/clients", GRAPH_DATA.nodes.filter(n => ["repository","feignClient"].includes(stereotypeOf(n))).length],
+    ["--accent", "endpoints", typeCounts.get("ENDPOINT") || 0],
+    ["--node-external", "external", (typeCounts.get("EXTERNAL_SERVICE") || 0) + (typeCounts.get("DATABASE") || 0)],
+    ["--node-topic", "topics", (typeCounts.get("KAFKA_TOPIC") || 0) + (typeCounts.get("QUEUE") || 0)],
+  ];
+  document.getElementById("graph-stats").innerHTML =
+    `<div style="margin-bottom:6px;color:var(--text);font-weight:600">${serviceName ? escapeHtml(serviceName) : "system"}</div>` +
+    counts.map(([c, l, n]) =>
+      `<div class="row"><span><span class="swatch" style="background:var(${c});color:var(${c})"></span>${l}</span><span class="val">${n}</span></div>`).join("") +
+    `<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><span>total nodes</span><span class="val">${GRAPH_DATA.nodes.length.toLocaleString()}</span></div>`;
+}
+
+/* ============================== explorer ============================== */
+const explorerState = { typeFilter: null, stereotypeFilter: null, query: "", selectedId: null };
+
+function applyExplorerTypeFilter(type) {
+  explorerState.typeFilter = type || null;
+  explorerState.stereotypeFilter = null;
+  renderTypeNav(); renderNodeList();
+}
+function applyExplorerStereotypeFilter(stereo) {
+  explorerState.typeFilter = null;
+  explorerState.stereotypeFilter = stereo || null;
+  renderTypeNav(); renderNodeList();
+}
+
+function renderTypeNav() {
+  const nav = document.getElementById("type-nav");
+  const types = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]);
+  let html = `<div class="type-group-label">All</div>`;
+  html += `<div class="type-row ${explorerState.typeFilter === null && explorerState.stereotypeFilter === null ? 'active' : ''}" data-type="">
+      <span>everything</span><span class="count">${GRAPH_DATA.nodes.length}</span></div>`;
+  html += `<div class="type-group-label">By type</div>`;
+  for (const [type, count] of types) {
+    html += `<div class="type-row ${explorerState.typeFilter === type ? 'active' : ''}" data-type="${type}">
+        <span>${type.toLowerCase().replace(/_/g, " ")}</span><span class="count">${count}</span></div>`;
+  }
+  nav.innerHTML = html;
+  nav.querySelectorAll(".type-row").forEach(row =>
+    row.addEventListener("click", () => applyExplorerTypeFilter(row.dataset.type)));
+}
+
+function renderNodeList() {
+  const list = document.getElementById("node-list");
+  const filtered = GRAPH_DATA.nodes.filter(n =>
+    (explorerState.typeFilter === null || n.type === explorerState.typeFilter) &&
+    (explorerState.stereotypeFilter === null || stereotypeOf(n) === explorerState.stereotypeFilter)
+  ).slice(0, 500);
+
+  if (filtered.length === 0) { list.innerHTML = `<div class="empty-state">No nodes match.</div>`; return; }
+  list.innerHTML = filtered.map(n => {
+    const extra = n.attributes?.path ? n.attributes.path : n.attributes?.value ? n.attributes.value : (n.provenance?.file || "");
+    return `<div class="node-row ${n.id === explorerState.selectedId ? 'selected' : ''}" data-id="${escapeHtml(n.id)}">
+      <span class="badge">${n.type.toLowerCase().replace(/_/g, " ")}</span>
+      <span class="name">${escapeHtml(n.name)}</span>
+      <span class="meta">${escapeHtml(String(extra)).slice(0, 40)}</span>
+    </div>`;
+  }).join("");
+  list.querySelectorAll(".node-row").forEach(row => row.addEventListener("click", () => selectNode(row.dataset.id)));
+}
+
+function selectNode(id) {
+  explorerState.selectedId = id;
+  renderNodeList();
+  document.getElementById("detail-panel").innerHTML = buildDetailHtml(id, { showGraphJump: true });
+  wireDetailHandlers(document.getElementById("detail-panel"));
+  const row = document.querySelector(`.node-row.selected`);
+  if (row) row.scrollIntoView({ block: "nearest" });
+}
+
+function buildDetailHtml(id, opts = {}) {
+  const node = nodesById.get(id);
+  if (!node) return `<div class="placeholder">Node not found.</div>`;
+
+  const attrs = Object.entries(node.attributes || {})
+    .filter(([k, v]) => v !== null && v !== undefined && String(v).length > 0)
+    .map(([k, v]) => `<div class="attr-row"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(Array.isArray(v) ? v.join(", ") : v)}</span></div>`)
+    .join("");
+
+  const editorUri = vscodeUri(node.provenance);
+  const pathLabel = node.provenance ? node.provenance.file + (node.provenance.line >= 0 ? ":" + node.provenance.line : "") : "";
+  const prov = node.provenance
+    ? `<div class="prov-link">
+        <span class="file">${escapeHtml(node.provenance.file)}</span>${node.provenance.line >= 0 ? ':' + node.provenance.line : ''} <span style="color:var(--text-faint)">via ${escapeHtml(node.provenance.extractor)}</span>
+        <div class="prov-actions">
+          ${editorUri ? `<a href="${escapeHtml(editorUri)}">${ICON_EDITOR} Open in editor</a>` : ""}
+          <button data-action="copy-path" data-value="${escapeHtml(pathLabel)}">${ICON_COPY} Copy path</button>
+        </div>
+      </div>`
+    : "";
+
+  const out = (outgoing.get(id) || []);
+  const inc = (incoming.get(id) || []);
+  const outHtml = out.map(e => edgeRowHtml(e, "target", "→")).join("");
+  const incHtml = inc.map(e => edgeRowHtml(e, "source", "←")).join("");
+
+  const jumpAction = opts.showGraphJump
+    ? `<button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>`
+    : `<button data-action="open-in-explorer" data-id="${escapeHtml(id)}">${ICON_EXTERNAL} Open in explorer</button>`;
+
+  return `
+    <div class="detail-type">${node.type.toLowerCase().replace(/_/g, " ")}${stereotypeOf(node) ? " · " + stereotypeOf(node) : ""}</div>
+    <div class="detail-name">${escapeHtml(node.name)}</div>
+    <div class="detail-actions">
+      ${jumpAction}
+      <button data-action="copy-markdown" data-id="${escapeHtml(id)}">${ICON_MARKDOWN} Copy context</button>
+      <button data-action="copy-link" data-id="${escapeHtml(id)}">${ICON_LINK} Copy link</button>
+    </div>
+    ${prov}
+    ${attrs ? `<div class="detail-section-label">Attributes</div>${attrs}` : ""}
+    ${out.length ? `<div class="detail-section-label">Outgoing (${out.length})</div><div class="edge-list">${outHtml}</div>` : ""}
+    ${inc.length ? `<div class="detail-section-label">Incoming (${inc.length})</div><div class="edge-list">${incHtml}</div>` : ""}
+  `;
+}
+
+function edgeRowHtml(edge, endKey, arrow) {
+  const otherId = edge[endKey];
+  const other = nodesById.get(otherId);
+  const label = other ? other.name : otherId;
+  return `<div class="edge-item" data-id="${escapeHtml(otherId)}">
+    <span class="dir">${arrow}</span><span class="etype">${edge.type.toLowerCase().replace(/_/g, " ")}</span><span class="target">${escapeHtml(label)}</span>
+  </div>`;
+}
+
+function wireDetailHandlers(container) {
+  container.querySelectorAll(".edge-item").forEach(item =>
+    item.addEventListener("click", () => {
+      if (container.id === "drawer-content") openDrawer(item.dataset.id);
+      else selectNode(item.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='show-in-graph']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      switchTab("graph");
+      focusGraphNode(btn.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='open-in-explorer']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      closeDrawer();
+      switchTab("explorer");
+      selectNode(btn.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='copy-path']").forEach(btn =>
+    btn.addEventListener("click", () => copyToClipboard(btn.dataset.value, btn)));
+  container.querySelectorAll("[data-action='copy-markdown']").forEach(btn =>
+    btn.addEventListener("click", () => copyToClipboard(buildMarkdownContext(btn.dataset.id), btn)));
+  container.querySelectorAll("[data-action='copy-link']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const url = location.href.split("#")[0] + "#n=" + encodeURIComponent(btn.dataset.id);
+      copyToClipboard(url, btn);
+    }));
+}
+
+/* ============================== command palette ============================== */
+const paletteState = { open: false, items: [], active: 0 };
+
+function openPalette() {
+  paletteState.open = true;
+  document.getElementById("palette-overlay").classList.add("open");
+  const input = document.getElementById("palette-input");
+  input.value = "";
+  runPaletteSearch("");
+  requestAnimationFrame(() => input.focus());
+}
+function closePalette() {
+  paletteState.open = false;
+  document.getElementById("palette-overlay").classList.remove("open");
+}
+
+function runPaletteSearch(q) {
+  const query = q.trim().toLowerCase();
+  const scored = [];
+  for (const n of GRAPH_DATA.nodes) {
+    if (n.type === "FIELD" || n.type === "METHOD") continue;
+    const name = n.name.toLowerCase();
+    const path = String(n.attributes?.path || "").toLowerCase();
+    let score = -1;
+    if (!query) score = (n.type === "ENDPOINT" ? 3 : n.type === "CLASS" ? 2 : 1);
+    else if (name.startsWith(query)) score = 100 - name.length;
+    else if (name.includes(query)) score = 60 - name.length;
+    else if (path.includes(query)) score = 50;
+    else if (n.id.toLowerCase().includes(query)) score = 30;
+    if (score >= 0) scored.push({ n, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  paletteState.items = scored.slice(0, 12).map(x => x.n);
+  paletteState.active = 0;
+  renderPaletteResults();
+}
+
+function renderPaletteResults() {
+  const wrap = document.getElementById("palette-results");
+  if (paletteState.items.length === 0) { wrap.innerHTML = `<div class="dash-empty">No matches.</div>`; return; }
+  wrap.innerHTML = paletteState.items.map((n, i) => `
+    <div class="palette-item ${i === paletteState.active ? 'active' : ''}" data-idx="${i}">
+      <span class="ptype">${n.type.toLowerCase().replace(/_/g, " ")}</span>
+      <span class="pname">${escapeHtml(n.name)}</span>
+      <span class="pmeta">${escapeHtml((n.provenance?.file || "").split("/").pop() || "")}</span>
+    </div>`).join("");
+  wrap.querySelectorAll(".palette-item").forEach(item => {
+    item.addEventListener("click", () => choosePaletteItem(+item.dataset.idx));
+    item.addEventListener("mousemove", () => {
+      paletteState.active = +item.dataset.idx;
+      wrap.querySelectorAll(".palette-item").forEach((el, i) => el.classList.toggle("active", i === paletteState.active));
+    });
+  });
+}
+
+function choosePaletteItem(idx) {
+  const node = paletteState.items[idx];
+  if (!node) return;
+  closePalette();
+  // jump straight into the graph when the node is drawable there — the graph is home
+  switchTab("graph");
+  focusGraphNode(node.id);
+}
+
+document.getElementById("open-palette").addEventListener("click", openPalette);
+document.getElementById("palette-overlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("palette-overlay")) closePalette();
+});
+document.getElementById("palette-input").addEventListener("input", e => runPaletteSearch(e.target.value));
+document.getElementById("palette-input").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); paletteState.active = Math.min(paletteState.active + 1, paletteState.items.length - 1); renderPaletteResults(); }
+  if (e.key === "ArrowUp") { e.preventDefault(); paletteState.active = Math.max(paletteState.active - 1, 0); renderPaletteResults(); }
+  if (e.key === "Enter") choosePaletteItem(paletteState.active);
+  if (e.key === "Escape") closePalette();
+});
+
+/* ============================== graph: data + physics ============================== */
+const STEREOTYPE_COLOR_VAR = {
+  controller: "--node-controller", service: "--node-service", repository: "--node-repository",
+  entity: "--node-entity", feignClient: "--node-external", component: "--node-config", configuration: "--node-config"
+};
+const TYPE_COLOR_VAR = {
+  EXTERNAL_SERVICE: "--node-external", FEIGN_CLIENT: "--node-external", DATABASE: "--node-external",
+  KAFKA_TOPIC: "--node-topic", QUEUE: "--node-topic", TABLE: "--node-entity",
+  ENDPOINT: "--accent", PACKAGE: "--node-config", CONFIG_PROPERTY: "--node-config"
+};
+function colorVarFor(node) {
+  return STEREOTYPE_COLOR_VAR[stereotypeOf(node)] || TYPE_COLOR_VAR[node.type] || "--node-plain";
+}
+
+const RELEVANT_EDGE_TYPES = new Set(["INJECTS", "DEPENDS_ON", "PUBLISHES_TO", "LISTENS_TO", "MAPS_TO", "EXPOSES"]);
+const MAX_SIM_NODES = 260;
+
+function topLevelGraphNodes() {
+  return GRAPH_DATA.nodes.filter(n => {
+    const st = stereotypeOf(n);
+    return st && st !== "plain" || n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT"
+      || n.type === "KAFKA_TOPIC" || n.type === "QUEUE" || n.type === "TABLE" || n.type === "DATABASE"
+      || n.type === "ENDPOINT";
+  });
+}
+function scopedGraphNodes(scope) {
+  const all = topLevelGraphNodes();
+  if (scope === "controllers") return all.filter(n => ["controller", "service"].includes(stereotypeOf(n)) || n.type === "ENDPOINT");
+  if (scope === "services") return all.filter(n => ["service", "repository", "feignClient"].includes(stereotypeOf(n)) || n.type === "TABLE" || n.type === "EXTERNAL_SERVICE" || n.type === "DATABASE");
+  if (scope === "external") return all.filter(n => ["feignClient"].includes(stereotypeOf(n)) || n.type === "EXTERNAL_SERVICE" || n.type === "DATABASE" || n.type === "KAFKA_TOPIC" || n.type === "QUEUE" || stereotypeOf(n) === "service");
+  return all;
+}
+
+const sim = { nodes: [], edges: [], byId: new Map(), physicsEnabled: true, alpha: 1 };
+const graphState = {
+  scope: "all", offsetX: 0, offsetY: 0, scale: 1,
+  dragging: false, draggingNode: null, panLast: null,
+  hoverId: null, needsResize: true, focusId: null,
+  impactMode: false, impactDepth: 2
+};
+
+/**
+ * Traces the "blast radius" of a node through the visual (class-level, deduped) graph: what
+ * would be affected if you changed it (downstream — outgoing edges) and what depends on it
+ * (upstream — incoming edges), out to `depth` hops. This is the everyday-refactoring question
+ * ("what breaks if I touch this repository/service?") made visible without grepping the repo.
+ */
+function computeImpact(nodeId, depth) {
+  const downstream = new Set(), upstream = new Set();
+  const downstreamEdgeKeys = new Set(), upstreamEdgeKeys = new Set();
+  const edgeKey = e => e.source + ">" + e.target;
+
+  let frontier = [nodeId], visited = new Set([nodeId]), d = 0;
+  while (frontier.length && d < depth) {
+    const next = [];
+    for (const id of frontier) {
+      for (const e of sim.edges) {
+        if (e.source !== id) continue;
+        downstreamEdgeKeys.add(edgeKey(e));
+        if (!visited.has(e.target)) { visited.add(e.target); downstream.add(e.target); next.push(e.target); }
+      }
+    }
+    frontier = next; d++;
+  }
+
+  frontier = [nodeId]; visited = new Set([nodeId]); d = 0;
+  while (frontier.length && d < depth) {
+    const next = [];
+    for (const id of frontier) {
+      for (const e of sim.edges) {
+        if (e.target !== id) continue;
+        upstreamEdgeKeys.add(edgeKey(e));
+        if (!visited.has(e.source)) { visited.add(e.source); upstream.add(e.source); next.push(e.source); }
+      }
+    }
+    frontier = next; d++;
+  }
+
+  return { downstream, upstream, downstreamEdgeKeys, upstreamEdgeKeys };
+}
+const particles = [];
+
+/** Method-level facts (e.g. "OrderService.placeOrder publishes to topic X") are drawn at class
+ *  level in the graph view, since methods aren't rendered as nodes here. */
+function liftToClass(id) {
+  return id.startsWith("METHOD:") ? "CLASS:" + id.slice(7).split("#")[0] : id;
+}
+
+function buildGraphData() {
+  let scopedNodes = scopedGraphNodes(graphState.scope);
+  const idSet = new Set(scopedNodes.map(n => n.id));
+  let edges = GRAPH_DATA.edges
+    .filter(e => RELEVANT_EDGE_TYPES.has(e.type))
+    .map(e => ({ ...e, source: liftToClass(e.source), target: liftToClass(e.target) }))
+    .filter(e => e.source !== e.target && idSet.has(e.source) && idSet.has(e.target));
+  // several methods of one class hitting the same target collapse into one visual edge
+  const seen = new Set();
+  edges = edges.filter(e => {
+    const key = e.source + "|" + e.type + "|" + e.target;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (scopedNodes.length > MAX_SIM_NODES) {
+    const degree = new Map();
+    for (const e of edges) {
+      degree.set(e.source, (degree.get(e.source) || 0) + 1);
+      degree.set(e.target, (degree.get(e.target) || 0) + 1);
+    }
+    scopedNodes = [...scopedNodes].sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0)).slice(0, MAX_SIM_NODES);
+    const keptIds = new Set(scopedNodes.map(n => n.id));
+    edges = edges.filter(e => keptIds.has(e.source) && keptIds.has(e.target));
+  }
+
+  const canvas = document.getElementById("graph-canvas");
+  const w = canvas.clientWidth || 900, h = canvas.clientHeight || 600;
+  const degree = new Map();
+  for (const e of edges) {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  }
+
+  sim.byId.clear();
+  // seed radius scales with node count so dense graphs start spread out rather than
+  // relying entirely on repulsion to un-clump hundreds of nodes from one small ring
+  const seedRadius = Math.max(Math.min(w, h) * 0.34, 28 * Math.sqrt(scopedNodes.length));
+  sim.nodes = scopedNodes.map((n, i) => {
+    const angle = (i / scopedNodes.length) * Math.PI * 2;
+    const radius = seedRadius;
+    const node = {
+      id: n.id, ref: n,
+      x: w / 2 + Math.cos(angle) * radius + (Math.random() - 0.5) * 50,
+      y: h / 2 + Math.sin(angle) * radius + (Math.random() - 0.5) * 50,
+      vx: 0, vy: 0, fx: null, fy: null,
+      degree: degree.get(n.id) || 0
+    };
+    sim.byId.set(n.id, node);
+    return node;
+  });
+  sim.edges = edges.map(e => ({ ...e, s: sim.byId.get(e.source), t: sim.byId.get(e.target) })).filter(e => e.s && e.t);
+  sim.alpha = 1;
+  particles.length = 0;
+
+  document.getElementById("graph-truncation-note")?.remove();
+  if (scopedNodes.length < scopedGraphNodes(graphState.scope).length) {
+    const note = document.createElement("div");
+    note.id = "graph-truncation-note";
+    note.textContent = `showing top ${scopedNodes.length} nodes by connectivity — use Ctrl K or Explorer for the rest`;
+    document.body.appendChild(note);
+  }
+}
+
+function nodeRadius(node) { return 4.5 + Math.min(10, Math.sqrt(node.degree) * 2); }
+
+function stepSimulation() {
+  const nodes = sim.nodes, n = nodes.length;
+  const canvas = document.getElementById("graph-canvas");
+  const w = canvas.clientWidth || 900, h = canvas.clientHeight || 600;
+
+  // Hard collision separation — runs regardless of alpha/physics-enabled state, so nodes are
+  // *guaranteed* never to sit on top of (or too near) each other, independent of how much the
+  // spring/repulsion forces have decayed. This is what actually keeps the layout spread out.
+  const PAD = 22;
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = nodes[j];
+      const minDist = nodeRadius(a) + nodeRadius(b) + PAD;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.hypot(dx, dy);
+      if (dist < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = 0.01; }
+      if (dist < minDist) {
+        const overlap = (minDist - dist) / 2;
+        const nx = dx / dist, ny = dy / dist;
+        if (a.fx === null) { a.x -= nx * overlap; a.y -= ny * overlap; }
+        if (b.fx === null) { b.x += nx * overlap; b.y += ny * overlap; }
+      }
+    }
+  }
+
+  if (!sim.physicsEnabled || sim.alpha <= 0.001) return;
+  // decays to a full stop — a settled layout should read as a static, deliberate diagram,
+  // not perpetual jitter; interactions (drag, re-layout, scope change) re-heat it briefly
+  sim.alpha *= 0.985;
+
+  const REPULSION = 9500, SPRING_LEN = 160, SPRING_K = 0.016, CENTER_K = 0.0016, DAMPING = 0.85;
+
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i];
+    if (a.fx !== null) continue;
+    let fx = 0, fy = 0;
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let distSq = dx * dx + dy * dy;
+      if (distSq < 1) distSq = 1;
+      const dist = Math.sqrt(distSq);
+      const force = (REPULSION * sim.alpha) / distSq;
+      fx += (dx / dist) * force;
+      fy += (dy / dist) * force;
+    }
+    fx += (w / 2 - a.x) * CENTER_K;
+    fy += (h / 2 - a.y) * CENTER_K;
+    a.vx = (a.vx + fx) * DAMPING;
+    a.vy = (a.vy + fy) * DAMPING;
+  }
+  for (const e of sim.edges) {
+    const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+    const dist = Math.max(1, Math.hypot(dx, dy));
+    const diff = (dist - SPRING_LEN) * SPRING_K * sim.alpha;
+    const nx = dx / dist, ny = dy / dist;
+    if (e.s.fx === null) { e.s.vx += nx * diff; e.s.vy += ny * diff; }
+    if (e.t.fx === null) { e.t.vx -= nx * diff; e.t.vy -= ny * diff; }
+  }
+  for (const a of nodes) {
+    if (a.fx !== null) { a.x = a.fx; a.y = a.fy; continue; }
+    a.x += a.vx; a.y += a.vy;
+  }
+}
+
+/* ============================== graph: rendering ============================== */
+function resizeCanvas() {
+  const canvas = document.getElementById("graph-canvas");
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+  canvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+  graphState.needsResize = false;
+}
+function worldToScreen(x, y) { return { x: x * graphState.scale + graphState.offsetX, y: y * graphState.scale + graphState.offsetY }; }
+function screenToWorld(x, y) { return { x: (x - graphState.offsetX) / graphState.scale, y: (y - graphState.offsetY) / graphState.scale }; }
+
+function edgeCurve(s1, s2) {
+  const mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2;
+  const dx = s2.x - s1.x, dy = s2.y - s1.y;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  const off = dist * 0.12;
+  return { cx: mx - (dy / dist) * off, cy: my + (dx / dist) * off };
+}
+function pointOnQuad(s1, c, s2, t) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * s1.x + 2 * mt * t * c.cx + t * t * s2.x,
+    y: mt * mt * s1.y + 2 * mt * t * c.cy + t * t * s2.y
+  };
+}
+
+function spawnParticles() {
+  const activeId = graphState.hoverId || graphState.focusId;
+  if (!activeId || particles.length > 70) return;
+  for (const e of sim.edges) {
+    if (e.source !== activeId && e.target !== activeId) continue;
+    if (Math.random() < 0.3) particles.push({ e, t: 0, speed: 0.008 + Math.random() * 0.012 });
+  }
+}
+function stepParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].t += particles[i].speed;
+    if (particles[i].t >= 1) particles.splice(i, 1);
+  }
+}
+
+function drawGraph() {
+  if (graphState.needsResize) resizeCanvas();
+  const canvas = document.getElementById("graph-canvas");
+  const ctx = canvas.getContext("2d");
+  const styles = getComputedStyle(document.documentElement);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const dark = isDarkTheme();
+
+  const bg = styles.getPropertyValue("--bg").trim();
+  const textColor = styles.getPropertyValue("--text-dim").trim();
+  const textFaint = styles.getPropertyValue("--text-faint").trim();
+  const accentColor = styles.getPropertyValue("--accent").trim();
+  const panelSolid = styles.getPropertyValue("--panel-solid").trim();
+  const nodeStroke = styles.getPropertyValue(dark ? "--bg" : "--panel-solid").trim();
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  // two faint, static corner washes for depth — no animation, no parallax
+  const g1 = ctx.createRadialGradient(w * 0.1, 0, 0, w * 0.1, 0, w * 0.5);
+  g1.addColorStop(0, styles.getPropertyValue("--bg-glow-1").trim());
+  g1.addColorStop(1, "transparent");
+  ctx.fillStyle = g1;
+  ctx.fillRect(0, 0, w, h);
+  const g2 = ctx.createRadialGradient(w, h, 0, w, h, w * 0.5);
+  g2.addColorStop(0, styles.getPropertyValue("--bg-glow-2").trim());
+  g2.addColorStop(1, "transparent");
+  ctx.fillStyle = g2;
+  ctx.fillRect(0, 0, w, h);
+
+  // world-space dot grid — pans/zooms with the graph like a real canvas tool (Figma/Linear convention)
+  const gridSpacing = 42;
+  const step = gridSpacing * graphState.scale;
+  if (step > 10) {
+    const ox = ((graphState.offsetX % step) + step) % step;
+    const oy = ((graphState.offsetY % step) + step) % step;
+    ctx.fillStyle = textFaint;
+    ctx.globalAlpha = dark ? 0.28 : 0.4;
+    for (let gx = ox; gx < w; gx += step) {
+      for (let gy = oy; gy < h; gy += step) {
+        ctx.fillRect(gx - 0.6, gy - 0.6, 1.2, 1.2);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Depth-1 dimming always applies around a focused node; when Impact mode is on, the traced
+  // radius (and its directional coloring) extends to the chosen hop count instead.
+  const activeImpact = (graphState.focusId && sim.byId.has(graphState.focusId))
+    ? computeImpact(graphState.focusId, graphState.impactMode ? graphState.impactDepth : 1)
+    : null;
+  const focusNeighbors = activeImpact
+    ? new Set([graphState.focusId, ...activeImpact.downstream, ...activeImpact.upstream])
+    : null;
+  const impactColoring = graphState.impactMode ? activeImpact : null;
+
+  // edges: gradient strokes between endpoint colors
+  for (const e of sim.edges) {
+    const s1 = worldToScreen(e.s.x, e.s.y), s2 = worldToScreen(e.t.x, e.t.y);
+    if (Math.max(s1.x, s2.x) < -40 || Math.min(s1.x, s2.x) > w + 40 || Math.max(s1.y, s2.y) < -40 || Math.min(s1.y, s2.y) > h + 40) continue;
+    const c = edgeCurve(s1, s2);
+    const dim = focusNeighbors && !(focusNeighbors.has(e.source) && focusNeighbors.has(e.target));
+    const isActive = (graphState.hoverId && (e.source === graphState.hoverId || e.target === graphState.hoverId))
+      || (graphState.focusId && (e.source === graphState.focusId || e.target === graphState.focusId) && !dim);
+
+    let impactDir = null;
+    if (impactColoring && !dim && !isActive) {
+      const key = e.source + ">" + e.target;
+      if (impactColoring.downstreamEdgeKeys.has(key)) impactDir = "down";
+      else if (impactColoring.upstreamEdgeKeys.has(key)) impactDir = "up";
+    }
+
+    if (dim) {
+      ctx.strokeStyle = "rgba(120,130,145,0.05)";
+      ctx.lineWidth = 1;
+    } else if (isActive) {
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 1.8;
+    } else if (impactDir) {
+      ctx.strokeStyle = styles.getPropertyValue(impactDir === "down" ? "--impact-down" : "--impact-up").trim();
+      ctx.lineWidth = 1.6;
+    } else {
+      const sc = styles.getPropertyValue(colorVarFor(e.s.ref)).trim();
+      const tc = styles.getPropertyValue(colorVarFor(e.t.ref)).trim();
+      const grad = ctx.createLinearGradient(s1.x, s1.y, s2.x, s2.y);
+      grad.addColorStop(0, sc);
+      grad.addColorStop(1, tc);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1;
+    }
+    ctx.globalAlpha = dim ? 1 : (isActive || impactDir ? 0.95 : (dark ? 0.46 : 0.5));
+    ctx.beginPath();
+    ctx.moveTo(s1.x, s1.y);
+    ctx.quadraticCurveTo(c.cx, c.cy, s2.x, s2.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    if (!dim && graphState.scale > 0.45 && (isActive || impactDir || graphState.scale > 0.8)) {
+      const tEnd = 1 - (nodeRadius(e.t) * graphState.scale + 3) / Math.max(20, Math.hypot(s2.x - s1.x, s2.y - s1.y));
+      const tip = pointOnQuad(s1, c, s2, Math.max(0.5, tEnd));
+      const before = pointOnQuad(s1, c, s2, Math.max(0.4, tEnd - 0.05));
+      const angle = Math.atan2(tip.y - before.y, tip.x - before.x);
+      ctx.fillStyle = isActive ? accentColor
+        : impactDir ? styles.getPropertyValue(impactDir === "down" ? "--impact-down" : "--impact-up").trim()
+        : styles.getPropertyValue(colorVarFor(e.t.ref)).trim();
+      ctx.globalAlpha = (isActive || impactDir) ? 1 : 0.5;
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(tip.x - 6.5 * Math.cos(angle - 0.42), tip.y - 6.5 * Math.sin(angle - 0.42));
+      ctx.lineTo(tip.x - 6.5 * Math.cos(angle + 0.42), tip.y - 6.5 * Math.sin(angle + 0.42));
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // flow particles — directional "data moving" cue along the active node's edges only
+  ctx.fillStyle = accentColor;
+  for (const p of particles) {
+    const s1 = worldToScreen(p.e.s.x, p.e.s.y), s2 = worldToScreen(p.e.t.x, p.e.t.y);
+    const c = edgeCurve(s1, s2);
+    const pos = pointOnQuad(s1, c, s2, p.t);
+    ctx.globalAlpha = Math.sin(p.t * Math.PI) * 0.95;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // nodes: flat, crisp discs with a background-matched stroke for separation — a subtle glow
+  // ring is reserved for hover/focus only, so the resting state reads as a clean diagram
+  for (const node of sim.nodes) {
+    const s = worldToScreen(node.x, node.y);
+    if (s.x < -40 || s.x > w + 40 || s.y < -40 || s.y > h + 40) continue;
+    const dim = focusNeighbors && !focusNeighbors.has(node.id);
+    const r = Math.max(2.5, nodeRadius(node) * graphState.scale);
+    const color = styles.getPropertyValue(colorVarFor(node.ref)).trim();
+    const isHover = node.id === graphState.hoverId;
+    const isFocus = node.id === graphState.focusId;
+
+    if (!dim && (isHover || isFocus)) {
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.globalAlpha = dim ? 0.12 : 1;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, 1.4 * graphState.scale);
+    ctx.strokeStyle = nodeStroke;
+    ctx.stroke();
+
+    if (isFocus) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r + 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (impactColoring && !dim) {
+      const ringColor = impactColoring.downstream.has(node.id) ? "--impact-down"
+        : impactColoring.upstream.has(node.id) ? "--impact-up" : null;
+      if (ringColor) {
+        ctx.strokeStyle = styles.getPropertyValue(ringColor).trim();
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const showLabel = !dim && (isHover || isFocus || (graphState.scale > 0.65 && node.degree >= 1) || graphState.scale > 1.15);
+    if (showLabel) {
+      const label = truncate(node.ref.name, 24);
+      ctx.font = (isHover || isFocus) ? "600 11px " + "monospace" : "10px monospace";
+      const tw = ctx.measureText(label).width;
+      const lx = s.x + r + 5;
+      ctx.fillStyle = panelSolid;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(lx - 3, s.y - 8, tw + 8, 15, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = (isHover || isFocus) ? styles.getPropertyValue("--text").trim() : textColor;
+      ctx.fillText(label, lx, s.y + 3.5);
+    }
+  }
+}
+
+function renderLegend() {
+  const legend = document.getElementById("graph-legend");
+  const items = graphState.impactMode
+    ? [["--impact-up", "upstream (calls this)"], ["--impact-down", "downstream (this calls)"]]
+    : [
+        ["--node-controller", "controller"], ["--node-service", "service"], ["--node-repository", "repo"],
+        ["--accent", "endpoint"], ["--node-entity", "table"], ["--node-external", "external"], ["--node-topic", "topic"]
+      ];
+  legend.innerHTML = items.map(([c, l]) => `<span class="item"><span class="dot" style="background:var(${c});color:var(${c})"></span>${l}</span>`).join("");
+}
+
+/* ============================== graph: interaction ============================== */
+function nodeAt(mx, my) {
+  const world = screenToWorld(mx, my);
+  let closest = null, closestDist = Infinity;
+  for (const node of sim.nodes) {
+    const d = Math.hypot(node.x - world.x, node.y - world.y);
+    const hitRadius = nodeRadius(node) + 8 / graphState.scale;
+    if (d < hitRadius && d < closestDist) { closest = node; closestDist = d; }
+  }
+  return closest;
+}
+
+function fitToView() {
+  if (sim.nodes.length === 0) return;
+  const canvas = document.getElementById("graph-canvas");
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of sim.nodes) {
+    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+  }
+  const gw = Math.max(1, maxX - minX), gh = Math.max(1, maxY - minY);
+  const scale = Math.min(2.5, Math.max(0.12, Math.min((w - 140) / gw, (h - 180) / gh)));
+  graphState.scale = scale;
+  graphState.offsetX = w / 2 - ((minX + maxX) / 2) * scale;
+  graphState.offsetY = h / 2 - ((minY + maxY) / 2) * scale;
+}
+
+/** Pans/zooms the camera to center a node already in the current sim scope, if present. */
+function panToNode(id) {
+  const target = sim.byId.get(id);
+  if (!target) return;
+  const canvas = document.getElementById("graph-canvas");
+  graphState.scale = Math.max(graphState.scale, 1.15);
+  graphState.offsetX = canvas.clientWidth / 2 - target.x * graphState.scale;
+  graphState.offsetY = canvas.clientHeight / 2 - target.y * graphState.scale;
+}
+
+function focusGraphNode(id) {
+  graphState.focusId = id;
+  if (!sim.byId.get(id)) {
+    graphState.scope = "all";
+    document.getElementById("graph-scope").value = "all";
+    buildGraphData();
+  }
+  if (sim.byId.get(id)) {
+    panToNode(id);
+    openDrawer(id);
+    updateHashForNode(id);
+  } else {
+    // not representable in the graph view (method/field/config) — show in explorer instead
+    switchTab("explorer");
+    selectNode(id);
+  }
+}
+
+/** Back/forward history of nodes opened in the graph drawer, so exploring via edge clicks
+ *  (which can wander several hops from where you started) doesn't strand you with no way back. */
+const drawerHistory = { stack: [], index: -1 };
+
+function openDrawer(id, opts = {}) {
+  graphState.focusId = id;
+  if (!opts.fromHistory) {
+    drawerHistory.stack = drawerHistory.stack.slice(0, drawerHistory.index + 1);
+    drawerHistory.stack.push(id);
+    drawerHistory.index = drawerHistory.stack.length - 1;
+  }
+  renderDrawerContent(id);
+  document.getElementById("graph-drawer").classList.add("open");
+  if (!opts.fromHistory) updateHashForNode(id);
+}
+
+function renderDrawerContent(id) {
+  document.getElementById("drawer-content").innerHTML = impactSummaryHtml(id) + buildDetailHtml(id, { showGraphJump: false });
+  wireDetailHandlers(document.getElementById("drawer-content"));
+  const backBtn = document.getElementById("drawer-back"), fwdBtn = document.getElementById("drawer-forward");
+  backBtn.disabled = drawerHistory.index <= 0;
+  fwdBtn.disabled = drawerHistory.index >= drawerHistory.stack.length - 1;
+}
+
+/** Re-renders the currently open drawer without touching history — used when impact-mode
+ *  settings change so the summary reflects the new depth/toggle immediately. */
+function refreshDrawerIfOpen() {
+  if (document.getElementById("graph-drawer").classList.contains("open") && graphState.focusId) {
+    renderDrawerContent(graphState.focusId);
+  }
+}
+
+function drawerGoBack() {
+  if (drawerHistory.index <= 0) return;
+  drawerHistory.index--;
+  const id = drawerHistory.stack[drawerHistory.index];
+  panToNode(id);
+  openDrawer(id, { fromHistory: true });
+}
+function drawerGoForward() {
+  if (drawerHistory.index >= drawerHistory.stack.length - 1) return;
+  drawerHistory.index++;
+  const id = drawerHistory.stack[drawerHistory.index];
+  panToNode(id);
+  openDrawer(id, { fromHistory: true });
+}
+document.getElementById("drawer-back").addEventListener("click", drawerGoBack);
+document.getElementById("drawer-forward").addEventListener("click", drawerGoForward);
+
+/** Small info block shown at the top of the drawer when Impact mode is active, summarizing the
+ *  blast radius of the focused node — the "what breaks if I change this" everyday question. */
+function impactSummaryHtml(nodeId) {
+  if (!graphState.impactMode) return "";
+  if (!sim.byId.has(nodeId)) {
+    return `<div class="impact-summary impact-na">Impact tracing isn't available for this node type in the graph view — see Explorer for its edges.</div>`;
+  }
+  const impact = computeImpact(nodeId, graphState.impactDepth);
+  const depthLabel = graphState.impactDepth >= 999 ? "all hops" : graphState.impactDepth + (graphState.impactDepth === 1 ? " hop" : " hops");
+  return `<div class="impact-summary">
+    <div class="impact-row"><span class="impact-dot up"></span>${impact.upstream.size} upstream — call${impact.upstream.size===1?"s":""} or depend${impact.upstream.size===1?"s":""} on this</div>
+    <div class="impact-row"><span class="impact-dot down"></span>${impact.downstream.size} downstream — what this calls or depends on</div>
+    <div class="impact-hint">within ${depthLabel}. Upstream is your blast radius if you change this; downstream is what it relies on.</div>
+  </div>`;
+}
+
+function closeDrawer() {
+  document.getElementById("graph-drawer").classList.remove("open");
+  graphState.focusId = null;
+}
+document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+
+/* ============================== shareable deep links ============================== */
+function updateHashForNode(id) {
+  try { history.replaceState(null, "", "#n=" + encodeURIComponent(id)); } catch (e) {}
+}
+function openFromHash() {
+  const m = location.hash.match(/^#n=(.+)$/);
+  if (!m) return;
+  const id = decodeURIComponent(m[1]);
+  if (!nodesById.has(id)) return;
+  if (sim.byId.has(id) || topLevelGraphNodes().some(n => n.id === id)) {
+    switchTab("graph");
+    focusGraphNode(id);
+  } else {
+    switchTab("explorer");
+    selectNode(id);
+  }
+}
+
+function animate() {
+  stepSimulation();
+  spawnParticles();
+  stepParticles();
+  drawGraph();
+  requestAnimationFrame(animate);
+}
+
+function initGraphInteraction() {
+  const canvas = document.getElementById("graph-canvas");
+  const tooltip = document.getElementById("graph-tooltip");
+
+  canvas.addEventListener("mousedown", e => {
+    const rect = canvas.getBoundingClientRect();
+    const hit = nodeAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (hit) {
+      graphState.draggingNode = hit;
+      hit.fx = hit.x; hit.fy = hit.y;
+      sim.alpha = Math.max(sim.alpha, 0.3);
+    } else {
+      graphState.dragging = true;
+      graphState.panLast = { x: e.clientX, y: e.clientY };
+    }
+    canvas.classList.add("grabbing");
+  });
+  window.addEventListener("mouseup", () => {
+    if (graphState.draggingNode) {
+      graphState.draggingNode.fx = null;
+      graphState.draggingNode.fy = null;
+      graphState.draggingNode = null;
+    }
+    graphState.dragging = false;
+    canvas.classList.remove("grabbing");
+  });
+  window.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (graphState.draggingNode) {
+      const world = screenToWorld(mx, my);
+      graphState.draggingNode.fx = world.x;
+      graphState.draggingNode.fy = world.y;
+      graphState.draggingNode.x = world.x;
+      graphState.draggingNode.y = world.y;
+      return;
+    }
+    if (graphState.dragging) {
+      graphState.offsetX += e.clientX - graphState.panLast.x;
+      graphState.offsetY += e.clientY - graphState.panLast.y;
+      graphState.panLast = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    const hit = nodeAt(mx, my);
+    if (hit) {
+      graphState.hoverId = hit.id;
+      const inC = (incoming.get(hit.id) || []).length, outC = (outgoing.get(hit.id) || []).length;
+      tooltip.style.display = "block";
+      tooltip.style.left = Math.min(mx + 14, rect.width - 340) + "px";
+      tooltip.style.top = (my + 14) + "px";
+      tooltip.innerHTML = `<div class="t">${hit.ref.type.toLowerCase().replace(/_/g, " ")}${stereotypeOf(hit.ref) ? " · " + stereotypeOf(hit.ref) : ""}</div>
+        <div>${escapeHtml(hit.ref.name)}</div>
+        <div style="color:var(--text-faint);font-size:10.5px;margin-top:3px">${inC} in · ${outC} out</div>`;
+    } else {
+      graphState.hoverId = null;
+      tooltip.style.display = "none";
+    }
+  });
+  canvas.addEventListener("click", () => {
+    if (graphState.draggingNode) return;
+    if (graphState.hoverId) {
+      openDrawer(graphState.hoverId);
+    } else {
+      closeDrawer();
+    }
+  });
+  canvas.addEventListener("dblclick", () => {
+    if (graphState.hoverId) {
+      closeDrawer();
+      switchTab("explorer");
+      selectNode(graphState.hoverId);
+    }
+  });
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const before = screenToWorld(mx, my);
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    graphState.scale = Math.max(0.1, Math.min(4, graphState.scale * factor));
+    const after = screenToWorld(mx, my);
+    graphState.offsetX += (after.x - before.x) * graphState.scale;
+    graphState.offsetY += (after.y - before.y) * graphState.scale;
+  }, { passive: false });
+
+  document.getElementById("graph-scope").addEventListener("change", e => {
+    graphState.scope = e.target.value;
+    closeDrawer();
+    buildGraphData();
+    requestAnimationFrame(fitToView);
+  });
+  document.getElementById("graph-reset").addEventListener("click", () => {
+    buildGraphData();
+    requestAnimationFrame(fitToView);
+  });
+  document.getElementById("graph-center").addEventListener("click", fitToView);
+  document.getElementById("graph-physics").addEventListener("change", e => {
+    sim.physicsEnabled = e.target.checked;
+    if (sim.physicsEnabled) sim.alpha = Math.max(sim.alpha, 0.3);
+  });
+  document.getElementById("impact-toggle").addEventListener("click", () => {
+    graphState.impactMode = !graphState.impactMode;
+    document.getElementById("impact-toggle").classList.toggle("active", graphState.impactMode);
+    document.getElementById("impact-depth").style.display = graphState.impactMode ? "" : "none";
+    renderLegend();
+    refreshDrawerIfOpen();
+  });
+  document.getElementById("impact-depth").addEventListener("change", e => {
+    graphState.impactDepth = +e.target.value;
+    refreshDrawerIfOpen();
+  });
+  window.addEventListener("resize", () => { graphState.needsResize = true; });
+}
+
+/* ============================== init ============================== */
+renderDashboard();
+renderGraphStats();
+renderTypeNav();
+renderNodeList();
+renderLegend();
+buildGraphData();
+initGraphInteraction();
+window.addEventListener("hashchange", openFromHash);
+requestAnimationFrame(() => {
+  resizeCanvas();
+  fitToView();
+  openFromHash();
+  requestAnimationFrame(animate);
+});
+</script>
+</body>
+</html>
