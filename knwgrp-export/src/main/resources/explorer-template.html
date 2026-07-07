@@ -403,6 +403,20 @@
   .attr-row .v { color: var(--text-dim); word-break: break-word; }
   .prov-link { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; margin-top: 2px; }
   .prov-link .file { color: var(--accent); }
+
+  /* API schema — request/response "model" cards, swagger-style */
+  .api-schema { display: flex; flex-direction: column; gap: 8px; }
+  .schema-block { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .schema-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .schema-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+  .schema-type { font-family: var(--mono); font-size: 11px; color: var(--accent); cursor: pointer; }
+  .schema-type:hover { text-decoration: underline; }
+  .schema-body { padding: 2px 0; }
+  .schema-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 10px; font-family: var(--mono); font-size: 12px; border-bottom: 1px solid var(--border); }
+  .schema-row:last-child { border-bottom: none; }
+  .schema-row .fname { color: var(--text); }
+  .schema-row .ftype { color: var(--text-faint); }
+  .schema-row.schema-empty { color: var(--text-faint); font-style: italic; justify-content: flex-start; }
   .edge-list { display: flex; flex-direction: column; gap: 3px; }
   .edge-item { display: flex; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
   .edge-item:hover { background: var(--panel-raised); }
@@ -874,12 +888,82 @@ function selectNode(id) {
   if (row) row.scrollIntoView({ block: "nearest" });
 }
 
+/* ============================== API schema (request/response, swagger-like) ============================== */
+const JDK_SIMPLE_TYPES = new Set([
+  "void", "String", "Integer", "Long", "Double", "Float", "Boolean", "Character", "Byte", "Short",
+  "Object", "int", "long", "double", "float", "boolean", "char", "byte", "short", "BigDecimal", "BigInteger",
+  "LocalDate", "LocalDateTime", "LocalTime", "Instant", "Date", "UUID", "Map"
+]);
+const COLLECTION_WRAPPER = /^(List|Set|Collection|Page|Iterable)<(.+)>$/;
+const SINGLE_WRAPPER = /^(ResponseEntity|Optional|CompletableFuture|Mono|Flux)<(.+)>$/;
+
+/** Peels off common Spring/reactive wrapper generics (ResponseEntity<T>, List<T>, Optional<T>, ...) to find the DTO type actually being carried. */
+function unwrapType(typeStr) {
+  if (!typeStr) return null;
+  const t = typeStr.trim();
+  const collectionMatch = t.match(COLLECTION_WRAPPER);
+  if (collectionMatch) return unwrapType(collectionMatch[2]);
+  const singleMatch = t.match(SINGLE_WRAPPER);
+  if (singleMatch) return unwrapType(singleMatch[2]);
+  return t;
+}
+function isCollectionType(typeStr) {
+  return COLLECTION_WRAPPER.test((typeStr || "").trim()) || /^(ResponseEntity|Optional|CompletableFuture|Mono|Flux)<(List|Set|Collection|Page|Iterable)</.test((typeStr || "").trim());
+}
+function findClassNodeBySimpleName(simpleName) {
+  if (!simpleName || simpleName.includes("<") || simpleName.includes(",")) return null;
+  return GRAPH_DATA.nodes.find(n => (n.type === "CLASS" || n.type === "INTERFACE" || n.type === "ENUM") && n.name === simpleName) || null;
+}
+function fieldsOfClass(classNode) {
+  if (!classNode) return [];
+  return (outgoing.get(classNode.id) || [])
+    .filter(e => e.type === "CONTAINS")
+    .map(e => nodesById.get(e.target))
+    .filter(n => n && n.type === "FIELD")
+    .map(n => ({ name: n.name, type: (n.attributes && n.attributes.declaredType) || "?" }));
+}
+
+/** Renders a compact "schema card" for a request/response type — field name + type, one level deep, in the spirit of a Swagger model view without generating a full OpenAPI spec. */
+function schemaHtml(typeStr, label) {
+  if (!typeStr || typeStr === "void") return "";
+  const core = unwrapType(typeStr);
+  if (!core || JDK_SIMPLE_TYPES.has(core)) return "";
+  const classNode = findClassNodeBySimpleName(core);
+  if (!classNode) return "";
+  const fields = fieldsOfClass(classNode);
+  const suffix = isCollectionType(typeStr) ? "[ ]" : "";
+  const rows = fields.length
+    ? fields.map(f => `<div class="schema-row"><span class="fname">${escapeHtml(f.name)}</span><span class="ftype">${escapeHtml(f.type)}</span></div>`).join("")
+    : `<div class="schema-row schema-empty">no fields found</div>`;
+  return `<div class="schema-block">
+    <div class="schema-head"><span class="schema-label">${escapeHtml(label)}</span><span class="schema-type" data-id="${escapeHtml(classNode.id)}">${escapeHtml(core)}${suffix}</span></div>
+    <div class="schema-body">${rows}</div>
+  </div>`;
+}
+
+function apiSchemaHtml(node) {
+  if (node.type !== "ENDPOINT") return "";
+  const a = node.attributes || {};
+  const pathParams = (a.pathParams || []).map(p => `<div class="schema-row"><span class="fname">${escapeHtml(p.split(" ")[1] || p)}</span><span class="ftype">${escapeHtml(p.split(" ")[0] || "")}</span></div>`).join("");
+  const queryParams = (a.queryParams || []).map(p => `<div class="schema-row"><span class="fname">${escapeHtml(p.split(" ")[1] || p)}</span><span class="ftype">${escapeHtml(p.split(" ")[0] || "")}</span></div>`).join("");
+  const requestSchema = schemaHtml(a.requestBodyType, "Request body");
+  const responseSchema = schemaHtml(a.returnType, "Response");
+
+  const pathBlock = pathParams ? `<div class="schema-block"><div class="schema-head"><span class="schema-label">Path params</span></div><div class="schema-body">${pathParams}</div></div>` : "";
+  const queryBlock = queryParams ? `<div class="schema-block"><div class="schema-head"><span class="schema-label">Query params</span></div><div class="schema-body">${queryParams}</div></div>` : "";
+
+  const body = pathBlock + queryBlock + requestSchema + responseSchema;
+  if (!body) return "";
+  return `<div class="detail-section-label">API</div><div class="api-schema">${body}</div>`;
+}
+
 function buildDetailHtml(id, opts = {}) {
   const node = nodesById.get(id);
   if (!node) return `<div class="placeholder">Node not found.</div>`;
 
+  const hiddenAttrKeys = node.type === "ENDPOINT" ? new Set(["parameters", "requestBodyType", "pathParams", "queryParams"]) : new Set();
   const attrs = Object.entries(node.attributes || {})
-    .filter(([k, v]) => v !== null && v !== undefined && String(v).length > 0)
+    .filter(([k, v]) => !hiddenAttrKeys.has(k) && v !== null && v !== undefined && String(v).length > 0)
     .map(([k, v]) => `<div class="attr-row"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(Array.isArray(v) ? v.join(", ") : v)}</span></div>`)
     .join("");
 
@@ -913,6 +997,7 @@ function buildDetailHtml(id, opts = {}) {
       <button data-action="copy-link" data-id="${escapeHtml(id)}">${ICON_LINK} Copy link</button>
     </div>
     ${prov}
+    ${apiSchemaHtml(node)}
     ${attrs ? `<div class="detail-section-label">Attributes</div>${attrs}` : ""}
     ${out.length ? `<div class="detail-section-label">Outgoing (${out.length})</div><div class="edge-list">${outHtml}</div>` : ""}
     ${inc.length ? `<div class="detail-section-label">Incoming (${inc.length})</div><div class="edge-list">${incHtml}</div>` : ""}
@@ -953,6 +1038,11 @@ function wireDetailHandlers(container) {
     btn.addEventListener("click", () => {
       const url = location.href.split("#")[0] + "#n=" + encodeURIComponent(btn.dataset.id);
       copyToClipboard(url, btn);
+    }));
+  container.querySelectorAll(".schema-type[data-id]").forEach(el =>
+    el.addEventListener("click", () => {
+      if (container.id === "drawer-content") openDrawer(el.dataset.id);
+      else selectNode(el.dataset.id);
     }));
 }
 
@@ -1285,10 +1375,18 @@ function pointOnQuad(s1, c, s2, t) {
 
 function spawnParticles() {
   const activeId = graphState.hoverId || graphState.focusId;
-  if (!activeId || particles.length > 70) return;
-  for (const e of sim.edges) {
-    if (e.source !== activeId && e.target !== activeId) continue;
-    if (Math.random() < 0.3) particles.push({ e, t: 0, speed: 0.008 + Math.random() * 0.012 });
+  if (activeId && particles.length < 90) {
+    for (const e of sim.edges) {
+      if (e.source !== activeId && e.target !== activeId) continue;
+      if (Math.random() < 0.3) particles.push({ e, t: 0, speed: 0.008 + Math.random() * 0.012, ambient: false });
+    }
+  }
+  // Ambient trickle: a light, continuous sense of data moving through the system even with
+  // nothing focused — this is the "live" cue, kept separate from node positions (which stay
+  // put) so the layout remains stable and readable while still feeling alive.
+  if (sim.edges.length && particles.length < 55 && Math.random() < 0.55) {
+    const e = sim.edges[Math.floor(Math.random() * sim.edges.length)];
+    particles.push({ e, t: 0, speed: 0.005 + Math.random() * 0.006, ambient: true });
   }
 }
 function stepParticles() {
@@ -1415,16 +1513,26 @@ function drawGraph() {
     }
   }
 
-  // flow particles — directional "data moving" cue along the active node's edges only
-  ctx.fillStyle = accentColor;
+  // flow particles — ambient dots trickle along random edges everywhere (the "live" cue),
+  // brighter accent-colored dots stream along whichever node is hovered/focused
   for (const p of particles) {
     const s1 = worldToScreen(p.e.s.x, p.e.s.y), s2 = worldToScreen(p.e.t.x, p.e.t.y);
     const c = edgeCurve(s1, s2);
     const pos = pointOnQuad(s1, c, s2, p.t);
-    ctx.globalAlpha = Math.sin(p.t * Math.PI) * 0.95;
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+    const pulse = Math.sin(p.t * Math.PI);
+    if (p.ambient) {
+      ctx.fillStyle = styles.getPropertyValue(colorVarFor(p.e.t.ref)).trim();
+      ctx.globalAlpha = pulse * (dark ? 0.45 : 0.55);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = accentColor;
+      ctx.globalAlpha = pulse * 0.95;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.globalAlpha = 1;
 

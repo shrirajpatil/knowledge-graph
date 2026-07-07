@@ -3,6 +3,7 @@ package io.knwgrp.spring;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.*;
 import io.knwgrp.core.AnalysisContext;
@@ -98,12 +99,31 @@ public class EndpointExtractor implements Extractor {
 
     private void createEndpoint(AnalysisContext context, String httpMethod, String path, MethodDeclaration method, String relativePath, Node controllerNode) {
         String endpointId = NodeIds.forEndpoint(httpMethod, path);
+
+        String requestBodyType = null;
+        List<String> pathParams = new ArrayList<>();
+        List<String> queryParams = new ArrayList<>();
+        for (Parameter p : method.getParameters()) {
+            List<String> paramAnnotations = p.getAnnotations().stream().map(AnnotationExpr::getNameAsString).toList();
+            String entry = p.getTypeAsString() + " " + p.getNameAsString();
+            if (paramAnnotations.contains("RequestBody")) {
+                requestBodyType = p.getTypeAsString();
+            } else if (paramAnnotations.contains("PathVariable")) {
+                pathParams.add(entry);
+            } else if (paramAnnotations.contains("RequestParam")) {
+                queryParams.add(entry);
+            }
+        }
+
         Node endpointNode = new Node(endpointId, NodeType.ENDPOINT, httpMethod + " " + path)
                 .withAttribute("httpMethod", httpMethod)
                 .withAttribute("path", path)
                 .withAttribute("handlerClass", controllerNode.getAttribute("fqn"))
                 .withAttribute("handlerMethod", method.getNameAsString())
                 .withAttribute("parameters", method.getParameters().stream().map(p -> p.getTypeAsString() + " " + p.getNameAsString()).toList())
+                .withAttribute("requestBodyType", requestBodyType)
+                .withAttribute("pathParams", pathParams)
+                .withAttribute("queryParams", queryParams)
                 .withAttribute("returnType", method.getTypeAsString())
                 .withProvenance(Provenance.of(relativePath, method.getBegin().map(p -> p.line).orElse(-1), name()));
 
