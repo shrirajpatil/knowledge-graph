@@ -287,7 +287,7 @@
   }
   .overlay.open { display: block; }
 
-  #view-dashboard .dash-scroll { height: calc(100vh - 72px); overflow-y: auto; }
+  #view-dashboard .dash-scroll, #view-api .dash-scroll { height: calc(100vh - 72px); overflow-y: auto; }
   .dash-wrap { max-width: 1180px; margin: 0 auto; padding: 22px 32px 70px; }
 
   .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
@@ -408,6 +408,8 @@
   .attr-row .v { color: var(--text-dim); word-break: break-word; }
   .prov-link { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; margin-top: 2px; }
   .prov-link .file { color: var(--accent); }
+  .blame-line { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 11px; margin-top: 6px; }
+  .blame-line b { color: var(--text-dim); font-weight: 600; }
 
   /* API schema — request/response "model" cards, swagger-style */
   .api-schema { display: flex; flex-direction: column; gap: 8px; }
@@ -459,6 +461,19 @@
   .curl-btn:hover { border-color: var(--border-bright); color: var(--text); }
   .curl-btn.copied { color: var(--accent); border-color: var(--accent-dim); }
 
+  /* request flow trace — a lightweight sequence view */
+  .trace { position: relative; margin: 4px 0 18px; }
+  .trace-step { position: relative; display: flex; gap: 12px; padding-bottom: 16px; }
+  .trace-step:last-child { padding-bottom: 0; }
+  .trace-step:not(:last-child)::before {
+    content: ""; position: absolute; left: 5px; top: 14px; bottom: -2px; width: 1px; background: var(--border-bright);
+  }
+  .trace-marker { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; z-index: 1; box-shadow: 0 0 0 3px var(--panel); }
+  .trace-content { flex: 1; cursor: pointer; }
+  .trace-content:hover .trace-label { text-decoration: underline; }
+  .trace-label { font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+  .trace-sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+
   /* API reference tab */
   .api-search { width: 100%; margin-bottom: 16px; background: var(--panel-raised); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 9px 13px; border-radius: 9px; outline: none; }
   .api-search:focus { border-color: var(--accent-dim); }
@@ -506,7 +521,8 @@
     padding: 9px 12px; border-radius: 9px; cursor: pointer;
     font-family: var(--mono); font-size: 12.5px;
   }
-  .palette-item .ptype { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
+  .palette-item .ptype { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); display: flex; align-items: center; gap: 3px; }
+  .palette-item .ptype svg { width: 9px; height: 9px; color: var(--warn); flex-shrink: 0; }
   .palette-item .pname { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .palette-item .pmeta { color: var(--text-faint); font-size: 10.5px; }
   .palette-item.active { background: var(--accent-glow); }
@@ -565,6 +581,12 @@
         <button id="graph-center" title="Fit graph to view">Fit view</button>
       </div>
       <label class="popover-check"><input type="checkbox" id="graph-physics" checked /> Physics simulation</label>
+      <div class="popover-divider"></div>
+      <div class="popover-label">Color by</div>
+      <select id="graph-color-mode" title="Color nodes by architectural role, or by Java package to see module boundaries">
+        <option value="layer" selected>Layer (role)</option>
+        <option value="package">Package</option>
+      </select>
       <div class="popover-divider"></div>
       <label class="popover-check" title="Trace what a change to the focused node would affect (downstream) and what depends on it (upstream)">
         <input type="checkbox" id="impact-toggle" /> Impact radius
@@ -664,6 +686,9 @@ const ICON_LINK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" s
 const ICON_TERMINAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
 const ICON_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 const ICON_DOWNLOAD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+const ICON_CLOCK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+const ICON_STAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const ICON_STAR_FILLED = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
 
 /** Best-effort "open in editor" deep link — works when VS Code is installed and its vscode:// protocol handler is registered (the common case for local dev). Absent repoRoot metadata (older exports), no link is offered. */
 function vscodeUri(provenance) {
@@ -1004,9 +1029,12 @@ function renderDashboard() {
         <h1>${serviceName ? `<span class="svc-name">${escapeHtml(serviceName)}</span>` : "Service"} — architecture at a glance</h1>
         <div class="sub">Auto-generated knowledge graph from static analysis — no AI, every fact traceable to file and line. Click anything to drill in, or press <b>Ctrl K</b> to jump straight to a class, endpoint, or config key.</div>
       </div>
-      <div class="meta">
-        ${classes.length.toLocaleString()} classes · ${configProps.length.toLocaleString()} config keys<br />
-        graph: ${GRAPH_DATA.nodes.length.toLocaleString()} nodes / ${GRAPH_DATA.edges.length.toLocaleString()} edges
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="meta">
+          ${classes.length.toLocaleString()} classes · ${configProps.length.toLocaleString()} config keys<br />
+          graph: ${GRAPH_DATA.nodes.length.toLocaleString()} nodes / ${GRAPH_DATA.edges.length.toLocaleString()} edges
+        </div>
+        <button class="curl-btn" id="copy-ai-context-btn" title="Copy a full system summary formatted for pasting into an LLM chat">${ICON_MARKDOWN} Copy AI context</button>
       </div>
     </div>
     <div class="layer-strip">${layerHtml}</div>
@@ -1047,6 +1075,52 @@ function renderDashboard() {
       if (cell.dataset.stereo) applyExplorerStereotypeFilter(cell.dataset.stereo);
       else if (cell.dataset.type) applyExplorerTypeFilter(cell.dataset.type);
     }));
+  document.getElementById("copy-ai-context-btn").addEventListener("click", e =>
+    copyToClipboard(buildSystemMarkdownContext(), e.currentTarget));
+}
+
+/** Condensed whole-system Markdown brief — architecture, endpoints, external dependencies, and
+ *  flagged issues in one paste-able block. This is the practical, low-effort stepping stone
+ *  toward a full MCP server (the dominant 2026 pattern for feeding AI coding agents codebase
+ *  context): today you paste this into a chat; tomorrow an MCP server could serve the same
+ *  facts as callable tools. */
+function buildSystemMarkdownContext() {
+  const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
+  const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
+  const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
+  const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+
+  const lines = [
+    `# ${serviceName || "Service"} — architecture summary`,
+    ``,
+    `Generated by Cartograph via static analysis (no AI, no guessing — every fact traceable to a file/line).`,
+    ``,
+    `## Overview`,
+    `- ${controllers.length} controllers, ${services.length} services, ${endpoints.length} REST endpoints`,
+    `- ${externals.length} external dependencies, ${topics.length} messaging topics/queues, ${tables.length} database tables`,
+    ``,
+    `## Endpoints`,
+    ...endpoints.slice(0, 60).map(ep => `- \`${ep.attributes.httpMethod} ${ep.attributes.path}\` → ${(ep.attributes.handlerClass || "").split(".").pop()}.${ep.attributes.handlerMethod}()${ep.attributes.requestBodyType ? ` — body: ${ep.attributes.requestBodyType}` : ""}${ep.attributes.returnType && ep.attributes.returnType !== "void" ? ` → ${ep.attributes.returnType}` : ""}`),
+    endpoints.length > 60 ? `- …and ${endpoints.length - 60} more` : "",
+    ``,
+    `## External dependencies`,
+    ...externals.map(e => `- ${e.name}${e.attributes.via ? ` (via ${e.attributes.via})` : ""}`),
+    ``,
+    `## Architecture issues found`,
+    ...(() => {
+      const cycles = findCircularDependencies();
+      const violations = findLayeringViolations();
+      const leaks = findLeakyEntities();
+      const issueLines = [];
+      cycles.forEach(c => issueLines.push(`- Circular dependency: ${c.map(id => (nodesById.get(id) || {}).name || id).join(" → ")}`));
+      violations.forEach(v => issueLines.push(`- Layering violation: ${v.source.name} injects ${v.target.name} directly, skipping the service layer`));
+      leaks.forEach(l => issueLines.push(`- Entity leak: \`${l.endpoint.attributes.httpMethod} ${l.endpoint.attributes.path}\` returns entity ${l.entity.name} directly`));
+      return issueLines.length ? issueLines : ["- None detected"];
+    })()
+  ];
+  return lines.filter(l => l !== "").join("\n");
 }
 
 function renderGraphStats() {
@@ -1118,11 +1192,71 @@ function apiEndpointCardHtml(ep) {
   </div>`;
 }
 
+const TRACE_EDGE_TYPES = new Set(["INJECTS", "DEPENDS_ON", "MAPS_TO", "PUBLISHES_TO"]);
+
+/** Walks outward from an endpoint's controller via INJECTS/DEPENDS_ON/MAPS_TO/PUBLISHES_TO
+ *  edges (bounded to 4 hops, capped at 12 steps) to approximate the request's call chain — the
+ *  "sequence diagram" view research consistently names as the #1 thing developers want for
+ *  understanding request flow, built here from the same edges the graph already has. */
+function buildRequestTrace(endpointNode) {
+  const a = endpointNode.attributes || {};
+  const steps = [{ id: endpointNode.id, label: `${a.httpMethod} ${a.path}`, sub: "HTTP request received", colorVar: "--accent" }];
+
+  const controllerNode = a.handlerClass ? nodesById.get("CLASS:" + a.handlerClass) : null;
+  if (!controllerNode) return steps;
+  steps.push({ id: controllerNode.id, label: controllerNode.name + "." + (a.handlerMethod || "") + "()", sub: "handles the request", colorVar: colorVarFor(controllerNode) });
+
+  const visited = new Set([controllerNode.id]);
+  let frontier = [controllerNode.id];
+  for (let depth = 0; depth < 4 && frontier.length && steps.length < 12; depth++) {
+    const next = [];
+    for (const id of frontier) {
+      for (const e of (outgoing.get(id) || [])) {
+        if (!TRACE_EDGE_TYPES.has(e.type) || visited.has(e.target)) continue;
+        const n = nodesById.get(e.target);
+        if (!n) continue;
+        visited.add(e.target);
+        steps.push({ id: n.id, label: n.name, sub: traceSubLabel(e.type, n), colorVar: colorVarFor(n) });
+        next.push(e.target);
+        if (steps.length >= 12) break;
+      }
+      if (steps.length >= 12) break;
+    }
+    frontier = next;
+  }
+  return steps;
+}
+
+function traceSubLabel(edgeType, targetNode) {
+  switch (edgeType) {
+    case "INJECTS": return "calls into";
+    case "DEPENDS_ON": return "depends on";
+    case "MAPS_TO": return "persists to table " + targetNode.name;
+    case "PUBLISHES_TO": return "publishes an event to";
+    default: return "";
+  }
+}
+
+function requestTraceHtml(endpointNode) {
+  const steps = buildRequestTrace(endpointNode);
+  if (steps.length <= 1) return "";
+  const stepsHtml = steps.map(s => `
+    <div class="trace-step">
+      <div class="trace-marker" style="background:var(${s.colorVar})"></div>
+      <div class="trace-content" data-id="${escapeHtml(s.id)}">
+        <div class="trace-label">${escapeHtml(s.label)}</div>
+        <div class="trace-sub">${escapeHtml(s.sub)}</div>
+      </div>
+    </div>`).join("");
+  return `<div class="detail-section-label">Request flow</div><div class="trace">${stepsHtml}</div>`;
+}
+
 function buildApiEndpointBody(id) {
   const node = nodesById.get(id);
   const methodNode = handlerMethodNode(node);
   const desc = methodNode && methodNode.attributes && methodNode.attributes.javadoc
     ? `<div class="api-endpoint-desc">${escapeHtml(methodNode.attributes.javadoc)}</div>` : "";
+  const trace = requestTraceHtml(node);
   const api = apiSchemaHtml(node);
   const meta = `<div class="api-endpoint-meta">
     <span>${escapeHtml(node.attributes.handlerClass || "")}.${escapeHtml(node.attributes.handlerMethod || "")}()</span>
@@ -1131,7 +1265,7 @@ function buildApiEndpointBody(id) {
   const actions = `<div class="detail-actions" style="margin-top:12px">
     <button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>
   </div>`;
-  return desc + api + meta + actions;
+  return desc + trace + api + meta + actions;
 }
 
 function wireApiHandlers() {
@@ -1213,6 +1347,7 @@ function renderNodeList() {
 
 function selectNode(id) {
   explorerState.selectedId = id;
+  recordRecentlyViewed(id);
   renderNodeList();
   document.getElementById("detail-panel").innerHTML = buildDetailHtml(id, { showGraphJump: true });
   wireDetailHandlers(document.getElementById("detail-panel"));
@@ -1487,7 +1622,8 @@ function buildDetailHtml(id, opts = {}) {
   const node = nodesById.get(id);
   if (!node) return `<div class="placeholder">Node not found.</div>`;
 
-  const hiddenAttrKeys = node.type === "ENDPOINT" ? new Set(["parameters", "requestBodyType", "pathParams", "queryParams"]) : new Set();
+  const hiddenAttrKeys = new Set(["lastModifiedBy", "lastModifiedDate"]);
+  if (node.type === "ENDPOINT") ["parameters", "requestBodyType", "pathParams", "queryParams"].forEach(k => hiddenAttrKeys.add(k));
   const attrs = Object.entries(node.attributes || {})
     .filter(([k, v]) => !hiddenAttrKeys.has(k) && v !== null && v !== undefined && String(v).length > 0)
     .map(([k, v]) => `<div class="attr-row"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(Array.isArray(v) ? v.join(", ") : v)}</span></div>`)
@@ -1495,9 +1631,15 @@ function buildDetailHtml(id, opts = {}) {
 
   const editorUri = vscodeUri(node.provenance);
   const pathLabel = node.provenance ? node.provenance.file + (node.provenance.line >= 0 ? ":" + node.provenance.line : "") : "";
+  const blameAuthor = node.attributes && node.attributes.lastModifiedBy;
+  const blameDate = node.attributes && node.attributes.lastModifiedDate;
+  const blameLine = blameAuthor
+    ? `<div class="blame-line">${ICON_CLOCK} Last changed by <b>${escapeHtml(blameAuthor)}</b>${blameDate ? " on " + escapeHtml(blameDate) : ""}</div>`
+    : "";
   const prov = node.provenance
     ? `<div class="prov-link">
         <span class="file">${escapeHtml(node.provenance.file)}</span>${node.provenance.line >= 0 ? ':' + node.provenance.line : ''} <span style="color:var(--text-faint)">via ${escapeHtml(node.provenance.extractor)}</span>
+        ${blameLine}
         <div class="prov-actions">
           ${editorUri ? `<a href="${escapeHtml(editorUri)}">${ICON_EDITOR} Open in editor</a>` : ""}
           <button data-action="copy-path" data-value="${escapeHtml(pathLabel)}">${ICON_COPY} Copy path</button>
@@ -1513,6 +1655,8 @@ function buildDetailHtml(id, opts = {}) {
   const jumpAction = opts.showGraphJump
     ? `<button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>`
     : `<button data-action="open-in-explorer" data-id="${escapeHtml(id)}">${ICON_EXTERNAL} Open in explorer</button>`;
+  const isPinned = pinnedIds.has(id);
+  const pinAction = `<button data-action="toggle-pin" data-id="${escapeHtml(id)}" title="${isPinned ? "Unpin" : "Pin for quick access via Ctrl K"}">${isPinned ? ICON_STAR_FILLED : ICON_STAR}</button>`;
 
   return `
     <div class="detail-type">${node.type.toLowerCase().replace(/_/g, " ")}${stereotypeOf(node) ? " · " + stereotypeOf(node) : ""}</div>
@@ -1521,6 +1665,7 @@ function buildDetailHtml(id, opts = {}) {
       ${jumpAction}
       <button data-action="copy-markdown" data-id="${escapeHtml(id)}">${ICON_MARKDOWN} Copy context</button>
       <button data-action="copy-link" data-id="${escapeHtml(id)}">${ICON_LINK} Copy link</button>
+      ${pinAction}
     </div>
     ${prov}
     ${apiSchemaHtml(node)}
@@ -1565,7 +1710,18 @@ function wireDetailHandlers(container) {
       const url = location.href.split("#")[0] + "#n=" + encodeURIComponent(btn.dataset.id);
       copyToClipboard(url, btn);
     }));
+  container.querySelectorAll("[data-action='toggle-pin']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      togglePin(btn.dataset.id);
+      if (container.id === "drawer-content") openDrawer(btn.dataset.id, { fromHistory: true });
+      else selectNode(btn.dataset.id);
+    }));
   container.querySelectorAll(".schema-type[data-id]").forEach(el =>
+    el.addEventListener("click", () => {
+      if (container.id === "drawer-content") openDrawer(el.dataset.id);
+      else selectNode(el.dataset.id);
+    }));
+  container.querySelectorAll(".trace-content[data-id]").forEach(el =>
     el.addEventListener("click", () => {
       if (container.id === "drawer-content") openDrawer(el.dataset.id);
       else selectNode(el.dataset.id);
@@ -1583,6 +1739,31 @@ function wireDetailHandlers(container) {
 }
 
 /* ============================== command palette ============================== */
+/** Pinned nodes and recently-viewed history, persisted to localStorage so they survive a
+ *  refresh — the everyday-workflow win of not having to re-search the same handful of classes
+ *  every time you come back to a task. */
+function loadIdSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch (e) { return new Set(); }
+}
+function loadIdList(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) { return []; }
+}
+const pinnedIds = loadIdSet("cartograph-pins");
+let recentIds = loadIdList("cartograph-recent");
+
+function savePinnedIds() {
+  try { localStorage.setItem("cartograph-pins", JSON.stringify([...pinnedIds])); } catch (e) {}
+}
+function recordRecentlyViewed(id) {
+  if (!nodesById.has(id)) return;
+  recentIds = [id, ...recentIds.filter(x => x !== id)].slice(0, 8);
+  try { localStorage.setItem("cartograph-recent", JSON.stringify(recentIds)); } catch (e) {}
+}
+function togglePin(id) {
+  if (pinnedIds.has(id)) pinnedIds.delete(id); else pinnedIds.add(id);
+  savePinnedIds();
+}
+
 const paletteState = { open: false, items: [], active: 0 };
 
 function openPalette() {
@@ -1600,6 +1781,21 @@ function closePalette() {
 
 function runPaletteSearch(q) {
   const query = q.trim().toLowerCase();
+
+  if (!query) {
+    // empty query: surface what you actually revisit — pinned first, then recently viewed —
+    // instead of an arbitrary default list, so Ctrl K doubles as a "jump back to my stuff" key
+    const pinned = [...pinnedIds].map(id => nodesById.get(id)).filter(Boolean);
+    const recent = recentIds.map(id => nodesById.get(id)).filter(n => n && !pinnedIds.has(n.id));
+    const combined = [...pinned, ...recent];
+    if (combined.length) {
+      paletteState.items = combined.slice(0, 12);
+      paletteState.active = 0;
+      renderPaletteResults();
+      return;
+    }
+  }
+
   const scored = [];
   for (const n of GRAPH_DATA.nodes) {
     if (n.type === "FIELD" || n.type === "METHOD") continue;
@@ -1624,7 +1820,7 @@ function renderPaletteResults() {
   if (paletteState.items.length === 0) { wrap.innerHTML = `<div class="dash-empty">No matches.</div>`; return; }
   wrap.innerHTML = paletteState.items.map((n, i) => `
     <div class="palette-item ${i === paletteState.active ? 'active' : ''}" data-idx="${i}">
-      <span class="ptype">${n.type.toLowerCase().replace(/_/g, " ")}</span>
+      <span class="ptype">${pinnedIds.has(n.id) ? ICON_STAR_FILLED + " " : ""}${n.type.toLowerCase().replace(/_/g, " ")}</span>
       <span class="pname">${escapeHtml(n.name)}</span>
       <span class="pmeta">${escapeHtml((n.provenance?.file || "").split("/").pop() || "")}</span>
     </div>`).join("");
@@ -1672,6 +1868,24 @@ function colorVarFor(node) {
   return STEREOTYPE_COLOR_VAR[stereotypeOf(node)] || TYPE_COLOR_VAR[node.type] || "--node-plain";
 }
 
+/** Deterministic hue from a package name — same package always gets the same color across a
+ *  render, letting "package" color mode visually cluster architectural boundaries in a large
+ *  graph (the "zoom by package" level research consistently flags as missing from graph tools). */
+function packageHashColor(node) {
+  const pkg = (node.attributes && node.attributes.package) || "";
+  let hash = 0;
+  for (let i = 0; i < pkg.length; i++) hash = (hash * 31 + pkg.charCodeAt(i)) | 0;
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 58%, 58%)`;
+}
+
+function resolveNodeColor(styles, node) {
+  if (graphState.colorMode === "package" && node.attributes && node.attributes.package) {
+    return packageHashColor(node);
+  }
+  return styles.getPropertyValue(colorVarFor(node)).trim();
+}
+
 const RELEVANT_EDGE_TYPES = new Set(["INJECTS", "DEPENDS_ON", "PUBLISHES_TO", "LISTENS_TO", "MAPS_TO", "EXPOSES"]);
 const MAX_SIM_NODES = 170;
 
@@ -1696,7 +1910,7 @@ const graphState = {
   scope: "all", offsetX: 0, offsetY: 0, scale: 1,
   dragging: false, draggingNode: null, panLast: null,
   hoverId: null, needsResize: true, focusId: null,
-  impactMode: false, impactDepth: 2
+  impactMode: false, impactDepth: 2, colorMode: "layer"
 };
 
 /**
@@ -2015,8 +2229,8 @@ function drawGraph() {
       ctx.strokeStyle = styles.getPropertyValue(impactDir === "down" ? "--impact-down" : "--impact-up").trim();
       ctx.lineWidth = 1.6;
     } else {
-      const sc = styles.getPropertyValue(colorVarFor(e.s.ref)).trim();
-      const tc = styles.getPropertyValue(colorVarFor(e.t.ref)).trim();
+      const sc = resolveNodeColor(styles, e.s.ref);
+      const tc = resolveNodeColor(styles, e.t.ref);
       const grad = ctx.createLinearGradient(s1.x, s1.y, s2.x, s2.y);
       grad.addColorStop(0, sc);
       grad.addColorStop(1, tc);
@@ -2037,7 +2251,7 @@ function drawGraph() {
       const angle = Math.atan2(tip.y - before.y, tip.x - before.x);
       ctx.fillStyle = isActive ? accentColor
         : impactDir ? styles.getPropertyValue(impactDir === "down" ? "--impact-down" : "--impact-up").trim()
-        : styles.getPropertyValue(colorVarFor(e.t.ref)).trim();
+        : resolveNodeColor(styles, e.t.ref);
       ctx.globalAlpha = (isActive || impactDir) ? 1 : 0.5;
       ctx.beginPath();
       ctx.moveTo(tip.x, tip.y);
@@ -2057,7 +2271,7 @@ function drawGraph() {
     const pos = pointOnQuad(s1, c, s2, p.t);
     const pulse = Math.sin(p.t * Math.PI);
     if (p.ambient) {
-      ctx.fillStyle = styles.getPropertyValue(colorVarFor(p.e.t.ref)).trim();
+      ctx.fillStyle = resolveNodeColor(styles, p.e.t.ref);
       ctx.globalAlpha = pulse * (dark ? 0.45 : 0.55);
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
@@ -2079,7 +2293,7 @@ function drawGraph() {
     if (s.x < -40 || s.x > w + 40 || s.y < -40 || s.y > h + 40) continue;
     const dim = focusNeighbors && !focusNeighbors.has(node.id);
     const r = Math.max(2.5, nodeRadius(node) * graphState.scale);
-    const color = styles.getPropertyValue(colorVarFor(node.ref)).trim();
+    const color = resolveNodeColor(styles, node.ref);
     const isHover = node.id === graphState.hoverId;
     const isFocus = node.id === graphState.focusId;
 
@@ -2144,6 +2358,10 @@ function drawGraph() {
 
 function renderLegend() {
   const legend = document.getElementById("graph-legend");
+  if (graphState.colorMode === "package") {
+    legend.innerHTML = `<span class="item">colored by package — same hue = same package</span>`;
+    return;
+  }
   const items = graphState.impactMode
     ? [["--impact-up", "upstream (calls this)"], ["--impact-down", "downstream (this calls)"]]
     : [
@@ -2215,6 +2433,7 @@ const drawerHistory = { stack: [], index: -1 };
 
 function openDrawer(id, opts = {}) {
   graphState.focusId = id;
+  recordRecentlyViewed(id);
   if (!opts.fromHistory) {
     drawerHistory.stack = drawerHistory.stack.slice(0, drawerHistory.index + 1);
     drawerHistory.stack.push(id);
@@ -2417,6 +2636,10 @@ function initGraphInteraction() {
   document.getElementById("impact-depth").addEventListener("change", e => {
     graphState.impactDepth = +e.target.value;
     refreshDrawerIfOpen();
+  });
+  document.getElementById("graph-color-mode").addEventListener("change", e => {
+    graphState.colorMode = e.target.value;
+    renderLegend();
   });
 
   const settingsBtn = document.getElementById("graph-settings-btn");

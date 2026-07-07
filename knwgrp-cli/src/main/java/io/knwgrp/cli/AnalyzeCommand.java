@@ -2,6 +2,7 @@ package io.knwgrp.cli;
 
 import io.knwgrp.core.Pipeline;
 import io.knwgrp.core.extractors.ConfigExtractor;
+import io.knwgrp.core.extractors.GitBlameExtractor;
 import io.knwgrp.export.HtmlExporter;
 import io.knwgrp.export.JsonExporter;
 import io.knwgrp.export.MermaidExporter;
@@ -41,6 +42,7 @@ public class AnalyzeCommand implements Callable<Integer> {
         Pipeline pipeline = new Pipeline()
                 .addExtractor(new ConfigExtractor())
                 .addExtractor(new JavaSourceExtractor())
+                .addExtractor(new GitBlameExtractor())
                 .addExtractor(new StereotypeExtractor())
                 .addExtractor(new EndpointExtractor())
                 .addExtractor(new DependencyInjectionExtractor())
