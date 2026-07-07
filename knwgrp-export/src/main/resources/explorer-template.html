@@ -407,16 +407,69 @@
   /* API schema — request/response "model" cards, swagger-style */
   .api-schema { display: flex; flex-direction: column; gap: 8px; }
   .schema-block { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .schema-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .schema-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
   .schema-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
   .schema-type { font-family: var(--mono); font-size: 11px; color: var(--accent); cursor: pointer; }
   .schema-type:hover { text-decoration: underline; }
+  .schema-copy {
+    margin-left: auto; background: none; border: 1px solid var(--border); color: var(--text-faint);
+    width: 22px; height: 22px; border-radius: 6px; cursor: pointer; display: grid; place-items: center;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .schema-copy:hover { color: var(--text); border-color: var(--border-bright); }
+  .schema-copy.copied { color: var(--accent); border-color: var(--accent-dim); }
   .schema-body { padding: 2px 0; }
   .schema-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 10px; font-family: var(--mono); font-size: 12px; border-bottom: 1px solid var(--border); }
   .schema-row:last-child { border-bottom: none; }
   .schema-row .fname { color: var(--text); }
   .schema-row .ftype { color: var(--text-faint); }
   .schema-row.schema-empty { color: var(--text-faint); font-style: italic; justify-content: flex-start; }
+
+  .json-block {
+    margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.6;
+    color: var(--text-dim); background: var(--panel-solid); overflow-x: auto; white-space: pre;
+    border-bottom: 1px solid var(--border);
+  }
+  .json-key { color: var(--node-service); }
+  .json-str { color: var(--node-controller); }
+  .json-num { color: var(--node-repository); }
+  .json-bool { color: var(--node-entity); }
+  .json-null { color: var(--text-faint); font-style: italic; }
+
+  .schema-fields { font-family: var(--mono); font-size: 11.5px; }
+  .schema-fields summary {
+    padding: 6px 10px; cursor: pointer; color: var(--text-faint); list-style: none;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .schema-fields summary::before { content: "▸"; font-size: 9px; }
+  .schema-fields[open] summary::before { content: "▾"; }
+  .schema-fields summary::-webkit-details-marker { display: none; }
+
+  .curl-btn {
+    display: flex; align-items: center; gap: 6px; margin-top: 2px;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    font-family: var(--mono); font-size: 11px; padding: 6px 10px; border-radius: 7px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .curl-btn:hover { border-color: var(--border-bright); color: var(--text); }
+  .curl-btn.copied { color: var(--accent); border-color: var(--accent-dim); }
+
+  /* API reference tab */
+  .api-search { width: 100%; margin-bottom: 16px; background: var(--panel-raised); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 9px 13px; border-radius: 9px; outline: none; }
+  .api-search:focus { border-color: var(--accent-dim); }
+  .api-group { margin-bottom: 18px; }
+  .api-group-title { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--text); margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .api-group-title .count { color: var(--text-faint); font-weight: 400; font-size: 11px; }
+  .api-endpoint { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+  .api-endpoint-head { display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; }
+  .api-endpoint-head:hover { background: var(--panel-raised); }
+  .api-endpoint-head .path { font-family: var(--mono); font-size: 13px; color: var(--text); flex: 1; }
+  .api-endpoint-head .chev { color: var(--text-faint); transition: transform 0.15s; flex-shrink: 0; }
+  .api-endpoint.open .chev { transform: rotate(90deg); }
+  .api-endpoint-body { display: none; padding: 4px 14px 16px; border-top: 1px solid var(--border); }
+  .api-endpoint.open .api-endpoint-body { display: block; }
+  .api-endpoint-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; margin: 12px 0; }
+  .api-endpoint-meta { display: flex; gap: 14px; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); margin-top: 10px; }
   .edge-list { display: flex; flex-direction: column; gap: 3px; }
   .edge-item { display: flex; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
   .edge-item:hover { background: var(--panel-raised); }
@@ -477,6 +530,7 @@
     <button class="tab-btn active" data-view="graph">Graph<span class="key">1</span></button>
     <button class="tab-btn" data-view="dashboard">Dashboard<span class="key">2</span></button>
     <button class="tab-btn" data-view="explorer">Explorer<span class="key">3</span></button>
+    <button class="tab-btn" data-view="api">API<span class="key">4</span></button>
   </div>
   <button class="palette-btn" id="open-palette">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -546,6 +600,11 @@
   <div class="dash-scroll"><div class="dash-wrap" id="dash-content"></div></div>
 </div>
 
+<!-- API reference overlay (swagger-like) -->
+<div class="overlay" id="view-api">
+  <div class="dash-scroll"><div class="dash-wrap" id="api-content"></div></div>
+</div>
+
 <!-- explorer overlay -->
 <div class="overlay" id="view-explorer">
   <div class="explorer-grid">
@@ -597,6 +656,8 @@ const ICON_EDITOR = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
 const ICON_COPY = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
 const ICON_MARKDOWN = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>';
 const ICON_LINK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+const ICON_TERMINAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+const ICON_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
 /** Best-effort "open in editor" deep link — works when VS Code is installed and its vscode:// protocol handler is registered (the common case for local dev). Absent repoRoot metadata (older exports), no link is offered. */
 function vscodeUri(provenance) {
@@ -666,7 +727,9 @@ function switchTab(name) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
   document.getElementById("view-dashboard").classList.toggle("open", name === "dashboard");
   document.getElementById("view-explorer").classList.toggle("open", name === "explorer");
+  document.getElementById("view-api").classList.toggle("open", name === "api");
   if (name === "graph") graphState.needsResize = true;
+  if (name === "api" && !apiState.rendered) renderApiReference();
 }
 document.querySelectorAll(".tab-btn").forEach(btn =>
   btn.addEventListener("click", () => switchTab(btn.dataset.view)));
@@ -678,6 +741,7 @@ window.addEventListener("keydown", e => {
   if (e.key === "1") switchTab("graph");
   if (e.key === "2") switchTab("dashboard");
   if (e.key === "3") switchTab("explorer");
+  if (e.key === "4") switchTab("api");
   if (e.key === "Escape") {
     if (paletteState.open) { closePalette(); return; }
     const popover = document.getElementById("graph-settings-popover");
@@ -830,6 +894,102 @@ function renderGraphStats() {
     `<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><span>total nodes</span><span class="val">${GRAPH_DATA.nodes.length.toLocaleString()}</span></div>`;
 }
 
+/* ============================== API reference (swagger-like) ============================== */
+const apiState = { rendered: false };
+
+function renderApiReference() {
+  apiState.rendered = true;
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const byController = new Map();
+  for (const ep of endpoints) {
+    const cls = ep.attributes.handlerClass || "Unknown";
+    if (!byController.has(cls)) byController.set(cls, []);
+    byController.get(cls).push(ep);
+  }
+  const verbOrder = { GET: 0, POST: 1, PUT: 2, PATCH: 3, DELETE: 4 };
+  const groups = [...byController.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const groupsHtml = groups.map(([cls, eps]) => {
+    const simpleName = cls.split(".").pop();
+    const sorted = [...eps].sort((a, b) => {
+      const va = verbOrder[a.attributes.httpMethod] ?? 9, vb = verbOrder[b.attributes.httpMethod] ?? 9;
+      return va - vb || a.attributes.path.localeCompare(b.attributes.path);
+    });
+    const rows = sorted.map(apiEndpointCardHtml).join("");
+    return `<div class="api-group">
+      <div class="api-group-title">${escapeHtml(simpleName)} <span class="count">${eps.length} endpoint${eps.length === 1 ? "" : "s"}</span></div>
+      ${rows}
+    </div>`;
+  }).join("");
+
+  document.getElementById("api-content").innerHTML = `
+    <div class="hero">
+      <div>
+        <h1>API Reference</h1>
+        <div class="sub">Every REST endpoint detected in this service, with request/response shapes inferred from the actual DTO classes — click a route to expand it.</div>
+      </div>
+    </div>
+    <input type="text" class="api-search" id="api-search-input" placeholder="Filter by path, method, or controller…" autocomplete="off" />
+    <div id="api-groups">${groupsHtml || '<div class="dash-empty">No REST endpoints detected.</div>'}</div>
+  `;
+  wireApiHandlers();
+}
+
+function apiEndpointCardHtml(ep) {
+  return `<div class="api-endpoint" data-id="${escapeHtml(ep.id)}">
+    <div class="api-endpoint-head">
+      <span class="verb verb-${ep.attributes.httpMethod}">${ep.attributes.httpMethod}</span>
+      <span class="path">${escapeHtml(ep.attributes.path)}</span>
+      <span class="chev">${ICON_CHEVRON}</span>
+    </div>
+    <div class="api-endpoint-body"></div>
+  </div>`;
+}
+
+function buildApiEndpointBody(id) {
+  const node = nodesById.get(id);
+  const methodNode = handlerMethodNode(node);
+  const desc = methodNode && methodNode.attributes && methodNode.attributes.javadoc
+    ? `<div class="api-endpoint-desc">${escapeHtml(methodNode.attributes.javadoc)}</div>` : "";
+  const api = apiSchemaHtml(node);
+  const meta = `<div class="api-endpoint-meta">
+    <span>${escapeHtml(node.attributes.handlerClass || "")}.${escapeHtml(node.attributes.handlerMethod || "")}()</span>
+    ${node.provenance ? `<span>${escapeHtml(node.provenance.file)}:${node.provenance.line}</span>` : ""}
+  </div>`;
+  const actions = `<div class="detail-actions" style="margin-top:12px">
+    <button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>
+  </div>`;
+  return desc + api + meta + actions;
+}
+
+function wireApiHandlers() {
+  document.querySelectorAll(".api-endpoint-head").forEach(head => {
+    head.addEventListener("click", () => {
+      const card = head.closest(".api-endpoint");
+      const wasOpen = card.classList.contains("open");
+      card.classList.toggle("open");
+      if (!wasOpen && !card.dataset.built) {
+        const body = card.querySelector(".api-endpoint-body");
+        body.innerHTML = buildApiEndpointBody(card.dataset.id);
+        wireDetailHandlers(body);
+        card.dataset.built = "1";
+      }
+    });
+  });
+  document.getElementById("api-search-input").addEventListener("input", e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll(".api-endpoint").forEach(card => {
+      const ep = nodesById.get(card.dataset.id);
+      const hay = (ep.attributes.httpMethod + " " + ep.attributes.path + " " + (ep.attributes.handlerClass || "")).toLowerCase();
+      card.style.display = !q || hay.includes(q) ? "" : "none";
+    });
+    document.querySelectorAll(".api-group").forEach(g => {
+      const anyVisible = [...g.querySelectorAll(".api-endpoint")].some(c => c.style.display !== "none");
+      g.style.display = anyVisible ? "" : "none";
+    });
+  });
+}
+
 /* ============================== explorer ============================== */
 const explorerState = { typeFilter: null, stereotypeFilter: null, query: "", selectedId: null };
 
@@ -923,22 +1083,111 @@ function fieldsOfClass(classNode) {
     .map(n => ({ name: n.name, type: (n.attributes && n.attributes.declaredType) || "?" }));
 }
 
-/** Renders a compact "schema card" for a request/response type — field name + type, one level deep, in the spirit of a Swagger model view without generating a full OpenAPI spec. */
+/** Placeholder example values per JDK/primitive type, used to build a realistic-looking JSON body. */
+const EXAMPLE_VALUES = {
+  String: "string", int: 0, Integer: 0, short: 0, Short: 0, byte: 0, Byte: 0,
+  long: 0, Long: 0, double: 0.0, Double: 0.0, float: 0.0, Float: 0.0,
+  BigDecimal: 0.0, BigInteger: 0, boolean: true, Boolean: true, char: "c", Character: "c",
+  UUID: "00000000-0000-0000-0000-000000000000",
+  LocalDate: "2024-01-01", LocalDateTime: "2024-01-01T00:00:00", Instant: "2024-01-01T00:00:00Z",
+  LocalTime: "00:00:00", Date: "2024-01-01T00:00:00Z", Object: {}
+};
+
+/** Recursively builds a plausible example JSON value for a Java type string, resolving DTO
+ *  fields from the graph the same way the field list does. Cycle- and depth-guarded so a
+ *  self-referential or deeply nested model can't hang the renderer. */
+function exampleValueForType(typeStr, depth = 0, seen = null) {
+  if (!typeStr) return null;
+  const t = typeStr.trim();
+  const collectionMatch = t.match(COLLECTION_WRAPPER);
+  if (collectionMatch) return [exampleValueForType(collectionMatch[2], depth, seen)];
+  const singleMatch = t.match(SINGLE_WRAPPER);
+  if (singleMatch) return exampleValueForType(singleMatch[2], depth, seen);
+  const mapMatch = t.match(/^Map<\s*[^,]+,\s*(.+)>$/);
+  if (mapMatch) return { additionalProp: exampleValueForType(mapMatch[1], depth, seen) };
+  if (t === "void") return null;
+  if (Object.prototype.hasOwnProperty.call(EXAMPLE_VALUES, t)) return EXAMPLE_VALUES[t];
+
+  if (depth > 4) return "…";
+  const classNode = findClassNodeBySimpleName(t);
+  if (!classNode) return null;
+  if (seen && seen.has(classNode.id)) return "…";
+  if (classNode.type === "ENUM") return t.replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase();
+
+  const fields = fieldsOfClass(classNode);
+  if (fields.length === 0) return {};
+  const nextSeen = new Set(seen || []); nextSeen.add(classNode.id);
+  const obj = {};
+  for (const f of fields) obj[f.name] = exampleValueForType(f.type, depth + 1, nextSeen);
+  return obj;
+}
+
+/** Minimal client-side JSON syntax highlighter — no dependency needed for something this small. */
+function syntaxHighlightJson(value) {
+  const json = JSON.stringify(value, null, 2) ?? "null";
+  const escaped = escapeHtml(json);
+  return escaped.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, m => {
+    let cls = "json-num";
+    if (/^"/.test(m)) cls = /:$/.test(m) ? "json-key" : "json-str";
+    else if (/true|false/.test(m)) cls = "json-bool";
+    else if (/null/.test(m)) cls = "json-null";
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+/** Renders a request/response "card": a syntax-highlighted JSON example up front (the fast way
+ *  to understand the shape), with the flat field/type list tucked into a native <details> for
+ *  when the raw types matter — the same information Swagger splits across "Example"/"Model". */
 function schemaHtml(typeStr, label) {
   if (!typeStr || typeStr === "void") return "";
   const core = unwrapType(typeStr);
-  if (!core || JDK_SIMPLE_TYPES.has(core)) return "";
+  if (!core) return "";
+  const isKnownDto = !JDK_SIMPLE_TYPES.has(core) && findClassNodeBySimpleName(core);
+  if (!isKnownDto) return "";
   const classNode = findClassNodeBySimpleName(core);
-  if (!classNode) return "";
   const fields = fieldsOfClass(classNode);
   const suffix = isCollectionType(typeStr) ? "[ ]" : "";
-  const rows = fields.length
+  const example = exampleValueForType(typeStr);
+  const fieldRows = fields.length
     ? fields.map(f => `<div class="schema-row"><span class="fname">${escapeHtml(f.name)}</span><span class="ftype">${escapeHtml(f.type)}</span></div>`).join("")
     : `<div class="schema-row schema-empty">no fields found</div>`;
+  const exampleId = "ex-" + Math.random().toString(36).slice(2, 9);
   return `<div class="schema-block">
-    <div class="schema-head"><span class="schema-label">${escapeHtml(label)}</span><span class="schema-type" data-id="${escapeHtml(classNode.id)}">${escapeHtml(core)}${suffix}</span></div>
-    <div class="schema-body">${rows}</div>
+    <div class="schema-head">
+      <span class="schema-label">${escapeHtml(label)}</span>
+      <span class="schema-type" data-id="${escapeHtml(classNode.id)}">${escapeHtml(core)}${suffix}</span>
+      <button class="schema-copy" data-action="copy-json" data-json-id="${exampleId}" title="Copy JSON">${ICON_COPY}</button>
+    </div>
+    <pre class="json-block" id="${exampleId}" data-raw="${escapeHtml(JSON.stringify(example, null, 2) ?? "null")}">${syntaxHighlightJson(example)}</pre>
+    <details class="schema-fields"><summary>Fields (${fields.length})</summary><div class="schema-body">${fieldRows}</div></details>
   </div>`;
+}
+
+/** Builds a ready-to-run cURL command for an endpoint, substituting example values for path/query params and a generated JSON body. */
+function buildCurlCommand(node) {
+  const a = node.attributes || {};
+  let path = a.path || "/";
+  for (const p of (a.pathParams || [])) {
+    const [type, name] = p.split(" ");
+    path = path.replace("{" + name + "}", encodeURIComponent(String(exampleValueForType(type))));
+  }
+  const query = (a.queryParams || []).map(p => {
+    const [type, name] = p.split(" ");
+    return name + "=" + encodeURIComponent(String(exampleValueForType(type)));
+  }).join("&");
+  let cmd = `curl -X ${a.httpMethod} "http://localhost:8080${path}${query ? "?" + query : ""}"`;
+  if (a.requestBodyType) {
+    const body = exampleValueForType(a.requestBodyType);
+    cmd += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body)}'`;
+  }
+  return cmd;
+}
+
+/** Finds the handler method node behind an endpoint via its EXPOSES edge, so we can pull the
+ *  method's javadoc (already extracted) as a human description in the API reference. */
+function handlerMethodNode(endpointNode) {
+  const exposesEdge = (incoming.get(endpointNode.id) || []).find(e => e.type === "EXPOSES");
+  return exposesEdge ? nodesById.get(exposesEdge.source) : null;
 }
 
 function apiSchemaHtml(node) {
@@ -954,7 +1203,9 @@ function apiSchemaHtml(node) {
 
   const body = pathBlock + queryBlock + requestSchema + responseSchema;
   if (!body) return "";
-  return `<div class="detail-section-label">API</div><div class="api-schema">${body}</div>`;
+  return `<div class="detail-section-label">API</div>
+    <div class="api-schema">${body}</div>
+    <button class="curl-btn" data-action="copy-curl" data-id="${escapeHtml(node.id)}">${ICON_TERMINAL} Copy as cURL</button>`;
 }
 
 function buildDetailHtml(id, opts = {}) {
@@ -1043,6 +1294,16 @@ function wireDetailHandlers(container) {
     el.addEventListener("click", () => {
       if (container.id === "drawer-content") openDrawer(el.dataset.id);
       else selectNode(el.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='copy-json']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const pre = document.getElementById(btn.dataset.jsonId);
+      if (pre) copyToClipboard(pre.dataset.raw, btn);
+    }));
+  container.querySelectorAll("[data-action='copy-curl']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const node = nodesById.get(btn.dataset.id);
+      if (node) copyToClipboard(buildCurlCommand(node), btn);
     }));
 }
 
