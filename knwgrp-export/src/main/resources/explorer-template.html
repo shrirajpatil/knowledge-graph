@@ -326,6 +326,11 @@
   .dash-section h2 .count-pill { font-size: 10px; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; color: var(--text-faint); }
   .dash-section h2 .dot { width: 7px; height: 7px; border-radius: 3px; }
   .dash-list { max-height: 400px; overflow-y: auto; }
+  .insights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px 16px; }
+  .insight-col.span-2 { grid-column: 1 / -1; }
+  .insight-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+  .insight-caveat { font-weight: 400; color: var(--text-faint); font-size: 10px; }
+  @media (max-width: 720px) { .insights-grid { grid-template-columns: 1fr; } }
   .dash-row {
     display: grid; grid-template-columns: 60px 1fr auto; gap: 12px; align-items: center;
     padding: 9px 16px; border-bottom: 1px solid var(--border);
@@ -658,6 +663,7 @@ const ICON_MARKDOWN = '<svg width="12" height="12" viewBox="0 0 24 24" fill="non
 const ICON_LINK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 const ICON_TERMINAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
 const ICON_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+const ICON_DOWNLOAD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 
 /** Best-effort "open in editor" deep link — works when VS Code is installed and its vscode:// protocol handler is registered (the common case for local dev). Absent repoRoot metadata (older exports), no link is offered. */
 function vscodeUri(provenance) {
@@ -752,6 +758,169 @@ window.addEventListener("keydown", e => {
 });
 
 /* ============================== dashboard ============================== */
+/* ============================== architecture insights ============================== */
+const LAYER_STEREOTYPES = ["controller", "service", "repository", "component"];
+
+/** Bounded-depth DFS (max chain length 4) for cycles among service/repo/component/controller
+ *  INJECTS edges — the classic "A depends on B depends on A" smell. Bounding depth keeps this
+ *  fast and keeps reported cycles short and readable rather than chasing long transitive chains. */
+function findCircularDependencies() {
+  const relevant = GRAPH_DATA.nodes.filter(n => (n.type === "CLASS" || n.type === "INTERFACE") && LAYER_STEREOTYPES.includes(stereotypeOf(n)));
+  const idSet = new Set(relevant.map(n => n.id));
+  const adj = new Map();
+  for (const e of GRAPH_DATA.edges) {
+    if (e.type !== "INJECTS" || e.source === e.target || !idSet.has(e.source) || !idSet.has(e.target)) continue;
+    if (!adj.has(e.source)) adj.set(e.source, new Set());
+    adj.get(e.source).add(e.target);
+  }
+  const cycles = [];
+  const seenKeys = new Set();
+  function dfs(start, current, path, depth) {
+    if (depth > 4) return;
+    for (const next of (adj.get(current) || [])) {
+      if (next === start && path.length >= 2) {
+        const key = [...path].sort().join("|");
+        if (!seenKeys.has(key)) { seenKeys.add(key); cycles.push([...path]); }
+        continue;
+      }
+      if (path.includes(next)) continue;
+      dfs(start, next, [...path, next], depth + 1);
+    }
+  }
+  for (const n of relevant) dfs(n.id, n.id, [n.id], 1);
+  return cycles.slice(0, 15);
+}
+
+/** Controllers injecting a repository directly skip the service layer — a common layering
+ *  violation that makes business logic hard to find and test in isolation. */
+function findLayeringViolations() {
+  const violations = [];
+  for (const e of GRAPH_DATA.edges) {
+    if (e.type !== "INJECTS") continue;
+    const source = nodesById.get(e.source), target = nodesById.get(e.target);
+    if (source && target && stereotypeOf(source) === "controller" && stereotypeOf(target) === "repository") {
+      violations.push({ source, target });
+    }
+  }
+  return violations;
+}
+
+/** An endpoint whose response type is itself a JPA @Entity means the persistence model is the
+ *  API contract — schema changes to the DB table now break API consumers directly. */
+function findLeakyEntities() {
+  const leaks = [];
+  for (const ep of GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT")) {
+    const core = unwrapType(ep.attributes.returnType);
+    if (!core) continue;
+    const classNode = findClassNodeBySimpleName(core);
+    if (!classNode) continue;
+    const isEntity = (outgoing.get(classNode.id) || []).some(e => e.type === "MAPS_TO");
+    if (isEntity) leaks.push({ endpoint: ep, entity: classNode });
+  }
+  return leaks;
+}
+
+/** Services/repos/components with no incoming references found anywhere in the analyzed
+ *  code — candidates for deletion, though static analysis can't see reflection, so this is a
+ *  lead to verify, not a verdict. */
+function findUnreferencedComponents() {
+  const stereos = ["service", "repository", "component"];
+  const usageEdgeTypes = new Set(["INJECTS", "DEPENDS_ON", "EXPOSES", "LISTENS_TO", "PUBLISHES_TO"]);
+  return GRAPH_DATA.nodes.filter(n => {
+    if ((n.type !== "CLASS" && n.type !== "INTERFACE") || !stereos.includes(stereotypeOf(n))) return false;
+    const inc = incoming.get(n.id) || [];
+    return !inc.some(e => usageEdgeTypes.has(e.type));
+  });
+}
+
+/** Classes ranked by total connections (fan-in + fan-out) — the highest-coupling classes are
+ *  usually where a change has the widest blast radius, and often refactoring candidates. */
+function findHotspots(limit = 8) {
+  return GRAPH_DATA.nodes
+    .filter(n => n.type === "CLASS" || n.type === "INTERFACE")
+    .map(n => ({ node: n, degree: (incoming.get(n.id) || []).length + (outgoing.get(n.id) || []).length }))
+    .filter(x => x.degree > 0)
+    .sort((a, b) => b.degree - a.degree)
+    .slice(0, limit);
+}
+
+function renderInsightsHtml() {
+  const cycles = findCircularDependencies();
+  const violations = findLayeringViolations();
+  const leaks = findLeakyEntities();
+  const dead = findUnreferencedComponents();
+  const hotspots = findHotspots();
+  const issueCount = cycles.length + violations.length + leaks.length;
+
+  const cycleRows = cycles.length
+    ? cycles.map(c => `<div class="dash-row" data-id="${escapeHtml(c[0])}">
+        <span class="verb" style="color:var(--danger);background:color-mix(in srgb, var(--danger) 15%, transparent)">CYCLE</span>
+        <span class="path">${c.map(id => escapeHtml((nodesById.get(id) || {}).name || id)).join(" → ")}</span>
+        <span class="sub">${c.length} classes</span>
+      </div>`).join("")
+    : `<div class="dash-empty">No circular dependencies found.</div>`;
+
+  const violationRows = violations.length
+    ? violations.map(v => `<div class="dash-row" data-id="${escapeHtml(v.source.id)}">
+        <span class="verb" style="color:var(--warn);background:color-mix(in srgb, var(--warn) 15%, transparent)">LAYER</span>
+        <span class="path">${escapeHtml(v.source.name)} → ${escapeHtml(v.target.name)}</span>
+        <span class="sub">skips the service layer</span>
+      </div>`).join("")
+    : `<div class="dash-empty">No controllers inject repositories directly.</div>`;
+
+  const leakRows = leaks.length
+    ? leaks.map(l => `<div class="dash-row" data-id="${escapeHtml(l.endpoint.id)}">
+        <span class="verb" style="color:var(--node-entity);background:color-mix(in srgb, var(--node-entity) 15%, transparent)">LEAK</span>
+        <span class="path">${escapeHtml(l.endpoint.attributes.httpMethod)} ${escapeHtml(l.endpoint.attributes.path)}</span>
+        <span class="sub">returns entity ${escapeHtml(l.entity.name)}</span>
+      </div>`).join("")
+    : `<div class="dash-empty">No endpoints return JPA entities directly.</div>`;
+
+  const deadRows = dead.length
+    ? dead.slice(0, 20).map(n => `<div class="dash-row" data-id="${escapeHtml(n.id)}">
+        <span class="verb" style="color:var(--text-faint);background:var(--panel-raised)">UNUSED</span>
+        <span class="path">${escapeHtml(n.name)}</span>
+        <span class="sub">${escapeHtml(stereotypeOf(n) || "")}</span>
+      </div>`).join("")
+    : `<div class="dash-empty">Everything has at least one static reference.</div>`;
+
+  const hotspotRows = hotspots.length
+    ? hotspots.map(h => `<div class="dash-row" data-id="${escapeHtml(h.node.id)}">
+        <span class="verb" style="color:var(--accent);background:var(--accent-glow)">${h.degree}</span>
+        <span class="path">${escapeHtml(h.node.name)}</span>
+        <span class="sub">${escapeHtml(stereotypeOf(h.node) || h.node.type.toLowerCase())} · connections</span>
+      </div>`).join("")
+    : `<div class="dash-empty">Not enough connections to rank.</div>`;
+
+  return `
+    <div class="dash-section span-2">
+      <h2><span class="dot" style="background:var(--danger);color:var(--danger)"></span>Architecture Insights <span class="count-pill">${issueCount} issue${issueCount === 1 ? "" : "s"}</span></h2>
+      <div class="insights-grid">
+        <div class="insight-col">
+          <div class="insight-title">Circular dependencies</div>
+          <div class="dash-list">${cycleRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Layering violations</div>
+          <div class="dash-list">${violationRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Entities leaked via API</div>
+          <div class="dash-list">${leakRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Unreferenced <span class="insight-caveat">— verify before removing, reflection/DI edge cases aren't visible here</span></div>
+          <div class="dash-list">${deadRows}</div>
+        </div>
+        <div class="insight-col span-2">
+          <div class="insight-title">Most coupled classes</div>
+          <div class="dash-list">${hotspotRows}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboard() {
   const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
   const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
@@ -842,6 +1011,7 @@ function renderDashboard() {
     </div>
     <div class="layer-strip">${layerHtml}</div>
     <div class="dash-columns">
+      ${renderInsightsHtml()}
       <div class="dash-section span-2">
         <h2><span class="dot" style="background:var(--accent);color:var(--accent)"></span>REST Endpoints <span class="count-pill">${endpoints.length}</span></h2>
         <div class="dash-list">${endpointRows}</div>
@@ -928,11 +1098,13 @@ function renderApiReference() {
         <h1>API Reference</h1>
         <div class="sub">Every REST endpoint detected in this service, with request/response shapes inferred from the actual DTO classes — click a route to expand it.</div>
       </div>
+      <button class="curl-btn" id="download-openapi-btn" style="white-space:nowrap">${ICON_DOWNLOAD} Download OpenAPI spec</button>
     </div>
     <input type="text" class="api-search" id="api-search-input" placeholder="Filter by path, method, or controller…" autocomplete="off" />
     <div id="api-groups">${groupsHtml || '<div class="dash-empty">No REST endpoints detected.</div>'}</div>
   `;
   wireApiHandlers();
+  document.getElementById("download-openapi-btn").addEventListener("click", downloadOpenApiSpec);
 }
 
 function apiEndpointCardHtml(ep) {
@@ -1181,6 +1353,109 @@ function buildCurlCommand(node) {
     cmd += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body)}'`;
   }
   return cmd;
+}
+
+const OPENAPI_PRIMITIVES = {
+  String: { type: "string" }, UUID: { type: "string", format: "uuid" },
+  LocalDate: { type: "string", format: "date" }, LocalDateTime: { type: "string", format: "date-time" },
+  Instant: { type: "string", format: "date-time" }, Date: { type: "string", format: "date-time" }, LocalTime: { type: "string" },
+  int: { type: "integer", format: "int32" }, Integer: { type: "integer", format: "int32" },
+  long: { type: "integer", format: "int64" }, Long: { type: "integer", format: "int64" },
+  short: { type: "integer" }, Short: { type: "integer" }, byte: { type: "integer" }, Byte: { type: "integer" },
+  double: { type: "number", format: "double" }, Double: { type: "number", format: "double" },
+  float: { type: "number", format: "float" }, Float: { type: "number", format: "float" },
+  BigDecimal: { type: "number" }, BigInteger: { type: "integer" },
+  boolean: { type: "boolean" }, Boolean: { type: "boolean" },
+  char: { type: "string" }, Character: { type: "string" }, Object: { type: "object" }
+};
+
+/** Converts a Java type string into an OpenAPI 3.0 schema object, resolving DTO fields
+ *  recursively the same way the JSON example generator does (cycle-guarded). */
+function typeToOpenApiSchema(typeStr, visited = null) {
+  if (!typeStr || typeStr === "void") return { type: "object", nullable: true };
+  const t = typeStr.trim();
+  const collectionMatch = t.match(COLLECTION_WRAPPER);
+  if (collectionMatch) return { type: "array", items: typeToOpenApiSchema(collectionMatch[2], visited) };
+  const singleMatch = t.match(SINGLE_WRAPPER);
+  if (singleMatch) return typeToOpenApiSchema(singleMatch[2], visited);
+  if (OPENAPI_PRIMITIVES[t]) return OPENAPI_PRIMITIVES[t];
+
+  const classNode = findClassNodeBySimpleName(t);
+  if (!classNode) return { type: "object" };
+  if (visited && visited.has(classNode.id)) return { type: "object", description: "circular reference to " + t };
+  if (classNode.type === "ENUM") return { type: "string" };
+
+  const fields = fieldsOfClass(classNode);
+  const nextVisited = new Set(visited || []); nextVisited.add(classNode.id);
+  const properties = {};
+  for (const f of fields) properties[f.name] = typeToOpenApiSchema(f.type, nextVisited);
+  return { type: "object", properties };
+}
+
+/** Builds a minimal but valid OpenAPI 3.0 document from every detected endpoint — importable
+ *  directly into Postman/Insomnia, or as a first draft for a hand-maintained spec. */
+function buildOpenApiSpec() {
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const paths = {};
+  for (const ep of endpoints) {
+    const a = ep.attributes;
+    const path = a.path || "/";
+    if (!paths[path]) paths[path] = {};
+
+    const parameters = [];
+    for (const p of (a.pathParams || [])) {
+      const [type, name] = p.split(" ");
+      parameters.push({ name, in: "path", required: true, schema: typeToOpenApiSchema(type) });
+    }
+    for (const p of (a.queryParams || [])) {
+      const [type, name] = p.split(" ");
+      parameters.push({ name, in: "query", required: false, schema: typeToOpenApiSchema(type) });
+    }
+
+    const methodNode = handlerMethodNode(ep);
+    const controllerSimpleName = (a.handlerClass || "default").split(".").pop();
+    const operation = {
+      summary: (methodNode && methodNode.attributes && methodNode.attributes.javadoc) || a.handlerMethod,
+      operationId: controllerSimpleName + "_" + a.handlerMethod,
+      tags: [controllerSimpleName],
+      parameters,
+      responses: {
+        "200": {
+          description: "OK",
+          content: (a.returnType && a.returnType !== "void")
+            ? { "application/json": { schema: typeToOpenApiSchema(a.returnType) } }
+            : undefined
+        }
+      }
+    };
+    if (a.requestBodyType) {
+      operation.requestBody = { required: true, content: { "application/json": { schema: typeToOpenApiSchema(a.requestBodyType) } } };
+    }
+    paths[path][a.httpMethod.toLowerCase()] = operation;
+  }
+
+  return {
+    openapi: "3.0.3",
+    info: {
+      title: (serviceName || "Service") + " API",
+      version: "1.0.0",
+      description: "Generated by Cartograph from static analysis — verify before relying on it as a source of truth."
+    },
+    paths
+  };
+}
+
+function downloadOpenApiSpec() {
+  const spec = buildOpenApiSpec();
+  const blob = new Blob([JSON.stringify(spec, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = (serviceName || "service").toLowerCase().replace(/[^a-z0-9-]+/g, "-") + "-openapi.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Finds the handler method node behind an endpoint via its EXPOSES edge, so we can pull the
