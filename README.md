@@ -52,13 +52,11 @@ Understanding a Spring Boot microservice you didn't write usually means grepping
   Add screenshots to docs/screenshots/ using these filenames, then this section renders them:
 -->
 
-| Dashboard | Graph |
-|---|---|
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Graph](docs/screenshots/graph.png) |
+<img width="1917" height="963" alt="download" src="https://github.com/user-attachments/assets/1c13abc5-7487-4e5e-8cb8-33ca41fe675d" />
+<img width="1918" height="960" alt="download" src="https://github.com/user-attachments/assets/42b86562-c724-4adc-b55a-029a5f473e6d" />
+<img width="1918" height="968" alt="download" src="https://github.com/user-attachments/assets/1f1f65ab-d9b4-45d0-a01d-e8ef6507daab" />
+<img width="1917" height="971" alt="download" src="https://github.com/user-attachments/assets/707569ea-ebe2-408f-b55e-4e1634c01bd6" />
 
-| API Reference | Explorer |
-|---|---|
-| ![API Reference](docs/screenshots/api-reference.png) | ![Explorer](docs/screenshots/explorer.png) |
 
 ## Getting started
 
