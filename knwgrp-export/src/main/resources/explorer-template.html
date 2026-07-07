@@ -206,6 +206,18 @@
   }
   :root[data-theme="light"] .graph-controls select { background: rgba(255,255,255,0.4); }
   .graph-controls select:hover { border-color: var(--border-bright); background: var(--panel-raised); }
+  .graph-search-wrap {
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(0,0,0,0.18); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0 10px; color: var(--text-faint); transition: border-color 0.15s;
+  }
+  :root[data-theme="light"] .graph-search-wrap { background: rgba(255,255,255,0.4); }
+  .graph-search-wrap:focus-within { border-color: var(--accent-dim); color: var(--accent); }
+  .graph-search-wrap input {
+    background: none; border: none; outline: none; color: var(--text);
+    font-family: var(--mono); font-size: 11.5px; padding: 6px 0; width: 130px;
+  }
+  .graph-search-wrap input::placeholder { color: var(--text-faint); }
   .legend { display: flex; gap: 10px; align-items: center; padding: 0 2px; }
   .legend .item { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 10.5px; }
   .legend .dot { width: 7px; height: 7px; border-radius: 50%; }
@@ -387,6 +399,12 @@
 
   .detail-type { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px; }
   .detail-name { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text); word-break: break-word; margin-bottom: 12px; padding-right: 26px; }
+  .node-explanation {
+    font-size: 12.5px; line-height: 1.6; color: var(--text-dim);
+    background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 14px;
+  }
+  .node-explanation b { color: var(--text); font-weight: 600; }
   .detail-actions { display: flex; gap: 8px; margin-bottom: 4px; }
   .detail-actions button {
     display: flex; align-items: center; gap: 6px;
@@ -609,6 +627,10 @@
 </header>
 
 <div class="graph-controls">
+  <div class="graph-search-wrap">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="graph-search" placeholder="Highlight nodes…" autocomplete="off" />
+  </div>
   <select id="graph-scope">
     <option value="all">Whole system</option>
     <option value="controllers">Controllers → Services</option>
@@ -1472,6 +1494,27 @@ function applyExplorerStereotypeFilter(stereo) {
   renderTypeNav(); renderNodeList();
 }
 
+/** Plain-language descriptions for node types whose name alone isn't self-explanatory —
+ *  shown as a hover tooltip in the Explorer's type list. */
+const TYPE_DESCRIPTIONS = {
+  FIELD: "A field (variable) declared on a class.",
+  METHOD: "A method declared on a class.",
+  CLASS: "A Java class found anywhere in the codebase.",
+  INTERFACE: "A Java interface found anywhere in the codebase.",
+  ENUM: "A Java enum type.",
+  CONFIG_PROPERTY: "A key from application.yml/.properties, resolved across profiles.",
+  CONFIG_FILE: "A parsed application.yml/.properties file.",
+  PACKAGE: "A Java package.",
+  ENDPOINT: "A REST route (HTTP method + path) exposed by a controller.",
+  SCHEDULED_JOB: "A method that runs automatically on a schedule (@Scheduled).",
+  EXTERNAL_SERVICE: "An external system this service calls over HTTP (Feign, RestTemplate, WebClient, etc.).",
+  FEIGN_CLIENT: "A Feign HTTP client interface calling another service.",
+  KAFKA_TOPIC: "A Kafka topic this service publishes to and/or listens to.",
+  QUEUE: "A message queue this service publishes to and/or listens to.",
+  TABLE: "A database table, mapped from a JPA @Entity class.",
+  DATABASE: "A database or cache this service connects to (e.g. Redis).",
+};
+
 function renderTypeNav() {
   const nav = document.getElementById("type-nav");
   const types = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]);
@@ -1480,7 +1523,8 @@ function renderTypeNav() {
       <span>everything</span><span class="count">${GRAPH_DATA.nodes.length}</span></div>`;
   html += `<div class="type-group-label">By type</div>`;
   for (const [type, count] of types) {
-    html += `<div class="type-row ${explorerState.typeFilter === type ? 'active' : ''}" data-type="${type}">
+    const desc = TYPE_DESCRIPTIONS[type] || "";
+    html += `<div class="type-row ${explorerState.typeFilter === type ? 'active' : ''}" data-type="${type}" ${desc ? `title="${escapeHtml(desc)}"` : ""}>
         <span>${type.toLowerCase().replace(/_/g, " ")}</span><span class="count">${count}</span></div>`;
   }
   nav.innerHTML = html;
@@ -1780,6 +1824,53 @@ function apiSchemaHtml(node) {
     <button class="curl-btn" data-action="copy-curl" data-id="${escapeHtml(node.id)}">${ICON_TERMINAL} Copy as cURL</button>`;
 }
 
+/** A one-sentence, plain-English explanation of what a node actually is, generated from its
+ *  type and real connections — the node-level counterpart to the system-level summary on the
+ *  Dashboard, so understanding doesn't require knowing what "INJECTS" or "MAPS_TO" mean. */
+function buildNodeExplanation(node) {
+  const type = node.type;
+  const out = outgoing.get(node.id) || [];
+  const inc = incoming.get(node.id) || [];
+  const a = node.attributes || {};
+
+  if (type === "ENDPOINT") {
+    const handler = (a.handlerClass || "").split(".").pop();
+    return `This is a ${a.httpMethod} endpoint at <b>${escapeHtml(a.path)}</b>, handled by ${escapeHtml(handler)}.${escapeHtml(a.handlerMethod)}().`
+      + (a.requestBodyType ? ` It expects a <b>${escapeHtml(a.requestBodyType)}</b> in the request body.` : "")
+      + (a.returnType && a.returnType !== "void" ? ` It returns a <b>${escapeHtml(a.returnType)}</b>.` : "")
+      + (a.securityRule ? ` Access requires ${escapeHtml(a.securityRule)}.` : ` No security annotation was detected on it.`);
+  }
+  if (type === "TABLE") {
+    return `This is a database table` + (inc.length ? `, referenced by <b>${inc.length}</b> class${inc.length === 1 ? "" : "es"}.` : ", with no detected references from the code.");
+  }
+  if (type === "KAFKA_TOPIC" || type === "QUEUE") {
+    const producers = inc.filter(e => e.type === "PUBLISHES_TO").length;
+    const consumers = out.filter(e => e.type === "LISTENS_TO").length;
+    return `This is a messaging ${type === "QUEUE" ? "queue" : "topic"}. <b>${producers}</b> method${producers === 1 ? "" : "s"} publish${producers === 1 ? "es" : ""} to it, and <b>${consumers}</b> method${consumers === 1 ? "" : "s"} listen${consumers === 1 ? "s" : ""} to it.`;
+  }
+  if (type === "SCHEDULED_JOB") {
+    return `This is a background job that ${escapeHtml(a.schedule || "runs on a schedule")}, invisible to anything calling into this service.`;
+  }
+  if (type === "EXTERNAL_SERVICE" || type === "FEIGN_CLIENT" || type === "DATABASE") {
+    return `This represents an external system this service depends on` + (a.via ? ` (via ${escapeHtml(a.via)})` : "") + `.`;
+  }
+  if (type === "CLASS" || type === "INTERFACE" || type === "ENUM") {
+    const role = stereotypeOf(node) && stereotypeOf(node) !== "plain" ? stereotypeOf(node) : type.toLowerCase();
+    const dependsOn = out.filter(e => e.type === "INJECTS").length;
+    const usedBy = inc.filter(e => e.type === "INJECTS").length;
+    const parts = [];
+    if (dependsOn) parts.push(`depends on <b>${dependsOn}</b> other component${dependsOn === 1 ? "" : "s"}`);
+    if (usedBy) parts.push(`is used by <b>${usedBy}</b> other component${usedBy === 1 ? "" : "s"}`);
+    return `This is a ${role}` + (parts.length ? ` that ${parts.join(" and ")}` : "") + ".";
+  }
+  if (type === "CONFIG_PROPERTY") {
+    const usedBy = inc.length;
+    return `This is a config key` + (a.value ? ` with value <b>"${escapeHtml(String(a.value))}"</b>` : "")
+      + (usedBy ? `, read by <b>${usedBy}</b> class${usedBy === 1 ? "" : "es"}.` : ", with no detected code reference (may be unused, or read reflectively).");
+  }
+  return "";
+}
+
 function buildDetailHtml(id, opts = {}) {
   const node = nodesById.get(id);
   if (!node) return `<div class="placeholder">Node not found.</div>`;
@@ -1820,9 +1911,12 @@ function buildDetailHtml(id, opts = {}) {
   const isPinned = pinnedIds.has(id);
   const pinAction = `<button data-action="toggle-pin" data-id="${escapeHtml(id)}" title="${isPinned ? "Unpin" : "Pin for quick access via Ctrl K"}">${isPinned ? ICON_STAR_FILLED : ICON_STAR}</button>`;
 
+  const explanation = buildNodeExplanation(node);
+
   return `
     <div class="detail-type">${node.type.toLowerCase().replace(/_/g, " ")}${stereotypeOf(node) ? " · " + stereotypeOf(node) : ""}</div>
     <div class="detail-name">${escapeHtml(node.name)}</div>
+    ${explanation ? `<div class="node-explanation">${explanation}</div>` : ""}
     <div class="detail-actions">
       ${jumpAction}
       <button data-action="copy-markdown" data-id="${escapeHtml(id)}">${ICON_MARKDOWN} Copy context</button>
@@ -2072,7 +2166,7 @@ const graphState = {
   scope: "all", offsetX: 0, offsetY: 0, scale: 1,
   dragging: false, draggingNode: null, panLast: null,
   hoverId: null, needsResize: true, focusId: null,
-  impactMode: false, impactDepth: 2, colorMode: "layer"
+  impactMode: false, impactDepth: 2, colorMode: "layer", searchQuery: ""
 };
 
 /**
@@ -2355,15 +2449,23 @@ function drawGraph() {
     ctx.globalAlpha = 1;
   }
 
+  // A live search query dims everything that doesn't match, taking priority over focus/impact
+  // dimming while the user is actively typing — the fastest way to find a node in a graph with
+  // hundreds of them without leaving the canvas or opening the command palette.
+  const searchQuery = (graphState.searchQuery || "").trim().toLowerCase();
+  const searchMatchIds = searchQuery
+    ? new Set(sim.nodes.filter(n => n.ref.name.toLowerCase().includes(searchQuery)).map(n => n.id))
+    : null;
+
   // Depth-1 dimming always applies around a focused node; when Impact mode is on, the traced
   // radius (and its directional coloring) extends to the chosen hop count instead.
-  const activeImpact = (graphState.focusId && sim.byId.has(graphState.focusId))
+  const activeImpact = (!searchMatchIds && graphState.focusId && sim.byId.has(graphState.focusId))
     ? computeImpact(graphState.focusId, graphState.impactMode ? graphState.impactDepth : 1)
     : null;
-  const focusNeighbors = activeImpact
+  const focusNeighbors = searchMatchIds || (activeImpact
     ? new Set([graphState.focusId, ...activeImpact.downstream, ...activeImpact.upstream])
-    : null;
-  const impactColoring = graphState.impactMode ? activeImpact : null;
+    : null);
+  const impactColoring = (!searchMatchIds && graphState.impactMode) ? activeImpact : null;
 
   // edges: gradient strokes between endpoint colors
   for (const e of sim.edges) {
@@ -2802,6 +2904,12 @@ function initGraphInteraction() {
   document.getElementById("graph-color-mode").addEventListener("change", e => {
     graphState.colorMode = e.target.value;
     renderLegend();
+  });
+  document.getElementById("graph-search").addEventListener("input", e => {
+    graphState.searchQuery = e.target.value;
+  });
+  document.getElementById("graph-search").addEventListener("keydown", e => {
+    if (e.key === "Escape") { e.target.value = ""; graphState.searchQuery = ""; e.target.blur(); }
   });
 
   const settingsBtn = document.getElementById("graph-settings-btn");

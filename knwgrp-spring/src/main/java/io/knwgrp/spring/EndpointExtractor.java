@@ -262,6 +262,7 @@ public class EndpointExtractor implements Extractor {
     private String joinPath(String classPath, String methodPath) {
         String a = normalize(classPath);
         String b = normalize(methodPath);
+        if (a.equals("/")) a = ""; // a bare @RequestMapping("/") at class level contributes nothing to the join
         if (a.isEmpty()) return b.isEmpty() ? "/" : b;
         if (b.isEmpty()) return a;
         return a + b;
