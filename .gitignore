@@ -1,0 +1,14 @@
+target/
+*.class
+dependency-reduced-pom.xml
+
+# Generated analysis output (per-run artifacts, may contain client-specific codebase details)
+knwgrp-output/
+knwgrp-output-*/
+cartograph-output/
+cartograph-output-*/
+
+.idea/
+*.iml
+.vscode/
+.claude/

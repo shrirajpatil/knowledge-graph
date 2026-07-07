@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orders
+    username: orders_user
+
+payment:
+  service:
+    name: payment-service
+    url: http://payment-service.internal:8080
+
+kafka:
+  topics:
+    order-events: order-events-topic

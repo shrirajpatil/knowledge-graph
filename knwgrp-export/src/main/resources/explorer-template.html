@@ -1,0 +1,2864 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Cartograph — Knowledge Graph Explorer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #07090d;
+    --bg-glow-1: rgba(56, 130, 116, 0.10);
+    --bg-glow-2: rgba(78, 98, 148, 0.09);
+    --panel: rgba(16, 20, 27, 0.78);
+    --panel-solid: #12161d;
+    --panel-raised: #1a1f28;
+    --border: rgba(90, 110, 140, 0.18);
+    --border-bright: rgba(120, 145, 180, 0.32);
+    --text: #dce3ec;
+    --text-dim: #8b96a7;
+    --text-faint: #525c6d;
+    --accent: #5fd4bc;
+    --accent-dim: #2e7a6a;
+    --accent-glow: rgba(95, 212, 188, 0.14);
+    --warn: #e0b168;
+    --danger: #e07a68;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif;
+
+    --node-controller: #5fd4bc;
+    --node-service: #74a8e8;
+    --node-repository: #e0b168;
+    --node-entity: #e08fb8;
+    --node-external: #e07a68;
+    --node-topic: #cfe068;
+    --node-config: #7d8798;
+    --node-plain: #596472;
+    --impact-up: #b98ee6;
+    --impact-down: #e2924f;
+
+    --shadow-lg: 0 18px 50px rgba(0,0,0,0.55);
+    --radius: 14px;
+    --radius-sm: 9px;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f5;
+    --bg-glow-1: rgba(31, 125, 108, 0.07);
+    --bg-glow-2: rgba(80, 100, 150, 0.07);
+    --panel: rgba(255, 255, 255, 0.82);
+    --panel-solid: #ffffff;
+    --panel-raised: #e6eaf0;
+    --border: rgba(60, 80, 110, 0.16);
+    --border-bright: rgba(60, 80, 110, 0.30);
+    --text: #171c25;
+    --text-dim: #596472;
+    --text-faint: #9aa3b0;
+    --accent: #157a68;
+    --accent-dim: #9fd8cc;
+    --accent-glow: rgba(21, 122, 104, 0.1);
+    --warn: #9c6a1d;
+    --danger: #b5462f;
+    --node-controller: #0f8a70;
+    --node-service: #2f6dc2;
+    --node-repository: #a8781c;
+    --node-entity: #bb4f86;
+    --node-external: #c05138;
+    --node-topic: #7f9312;
+    --node-config: #6b7686;
+    --node-plain: #8a95a3;
+    --impact-up: #7d4bb8;
+    --impact-down: #b8611f;
+    --shadow-lg: 0 18px 50px rgba(30,40,60,0.16);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eef1f5;
+      --bg-glow-1: rgba(31, 125, 108, 0.07);
+      --bg-glow-2: rgba(80, 100, 150, 0.07);
+      --panel: rgba(255, 255, 255, 0.82);
+      --panel-solid: #ffffff;
+      --panel-raised: #e6eaf0;
+      --border: rgba(60, 80, 110, 0.16);
+      --border-bright: rgba(60, 80, 110, 0.30);
+      --text: #171c25;
+      --text-dim: #596472;
+      --text-faint: #9aa3b0;
+      --accent: #157a68;
+      --accent-dim: #9fd8cc;
+      --accent-glow: rgba(21, 122, 104, 0.1);
+      --warn: #9c6a1d;
+      --danger: #b5462f;
+      --node-controller: #0f8a70;
+      --node-service: #2f6dc2;
+      --node-repository: #a8781c;
+      --node-entity: #bb4f86;
+      --node-external: #c05138;
+      --node-topic: #7f9312;
+      --node-config: #6b7686;
+      --node-plain: #8a95a3;
+      --impact-up: #7d4bb8;
+      --impact-down: #b8611f;
+      --shadow-lg: 0 18px 50px rgba(30,40,60,0.16);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans); font-size: 14px;
+    overflow: hidden;
+  }
+  ::selection { background: var(--accent-glow); }
+
+  /* ================= full-page graph layer (the home page) ================= */
+  #graph-layer { position: fixed; inset: 0; z-index: 1; }
+  #graph-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  #graph-canvas.grabbing { cursor: grabbing; }
+
+  /* ================= floating header ================= */
+  header {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px;
+    padding: 9px 14px; z-index: 30;
+    background: var(--panel); backdrop-filter: blur(18px);
+    border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    max-width: calc(100vw - 28px);
+  }
+  header .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-weight: 700; font-size: 13.5px;
+    color: var(--text); white-space: nowrap;
+  }
+  header .brand .logo {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), var(--node-service));
+    display: grid; place-items: center;
+    color: #07090d; font-size: 12px; font-weight: 800;
+  }
+  header .brand .svc { color: var(--text-faint); font-weight: 400; }
+  header .brand .svc b { color: var(--accent); font-weight: 600; }
+
+  .tabs {
+    display: flex; gap: 2px; background: rgba(0,0,0,0.16);
+    border: 1px solid var(--border); border-radius: 10px; padding: 3px;
+  }
+  :root[data-theme="light"] .tabs { background: rgba(255,255,255,0.4); }
+  .tab-btn {
+    background: none; border: none; border-radius: 7px;
+    padding: 6px 13px; font-family: var(--mono); font-size: 12px;
+    color: var(--text-dim); cursor: pointer; white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); background: var(--panel-solid); box-shadow: 0 1px 5px rgba(0,0,0,0.35); }
+  .tab-btn .key {
+    margin-left: 6px; font-size: 9px; color: var(--text-faint);
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px;
+  }
+
+  .palette-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,0.16); border: 1px solid var(--border);
+    color: var(--text-faint); padding: 7px 12px; border-radius: 10px;
+    font-family: var(--mono); font-size: 12px; cursor: pointer; min-width: 200px;
+    transition: border-color 0.15s;
+  }
+  :root[data-theme="light"] .palette-btn { background: rgba(255,255,255,0.4); }
+  .palette-btn:hover { border-color: var(--border-bright); color: var(--text-dim); background: var(--panel-raised); }
+  .palette-btn .kbd {
+    margin-left: auto; font-size: 10px; border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 5px;
+  }
+  .icon-btn {
+    background: rgba(0,0,0,0.16); border: 1px solid var(--border);
+    color: var(--text-dim); width: 33px; height: 33px; border-radius: 10px;
+    cursor: pointer; display: grid; place-items: center;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  :root[data-theme="light"] .icon-btn { background: rgba(255,255,255,0.4); }
+  .icon-btn:hover { border-color: var(--border-bright); color: var(--text); background: var(--panel-raised); }
+  .icon-btn svg, .palette-btn svg, .drawer-close svg, .detail-actions svg { display: block; }
+  .icon-btn .sun { display: none; }
+  .icon-btn .moon { display: block; }
+  :root[data-theme="light"] .icon-btn .sun { display: block; }
+  :root[data-theme="light"] .icon-btn .moon { display: none; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .icon-btn .sun { display: block; }
+    :root:not([data-theme="dark"]) .icon-btn .moon { display: none; }
+  }
+
+  /* ================= floating graph HUD ================= */
+  .graph-controls {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px; z-index: 25;
+    padding: 8px 10px; z-index: 25;
+    background: var(--panel); backdrop-filter: blur(18px);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    font-family: var(--mono); font-size: 12px;
+    max-width: calc(100vw - 28px);
+  }
+  .graph-controls select {
+    background: rgba(0,0,0,0.18); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 11.5px; padding: 6px 11px; border-radius: 8px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  :root[data-theme="light"] .graph-controls select { background: rgba(255,255,255,0.4); }
+  .graph-controls select:hover { border-color: var(--border-bright); background: var(--panel-raised); }
+  .legend { display: flex; gap: 10px; align-items: center; padding: 0 2px; }
+  .legend .item { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 10.5px; }
+  .legend .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* settings popover — everything that used to be loose toolbar buttons now lives here,
+     collapsed behind one icon so the default graph view stays uncluttered */
+  .settings-anchor { position: relative; }
+  .popover {
+    position: absolute; bottom: calc(100% + 10px); right: 0;
+    width: 230px; background: var(--panel-solid); border: 1px solid var(--border-bright);
+    border-radius: 12px; box-shadow: var(--shadow-lg); padding: 12px;
+    display: none; flex-direction: column; gap: 10px;
+    font-family: var(--mono); font-size: 12px; z-index: 40;
+  }
+  .popover.open { display: flex; }
+  .popover-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+  .popover-row { display: flex; gap: 8px; }
+  .popover-row button, .popover select {
+    flex: 1; background: var(--panel-raised); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 11.5px; padding: 6px 8px; border-radius: 7px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .popover-row button:hover, .popover select:hover { border-color: var(--border-bright); }
+  .popover-check { display: flex; align-items: center; gap: 7px; color: var(--text-dim); cursor: pointer; }
+  .popover-check input { accent-color: var(--accent); }
+  .popover-divider { height: 1px; background: var(--border); margin: 1px 0; }
+  .popover-stats .row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; color: var(--text-dim); }
+  .popover-stats .row .val { color: var(--text); font-variant-numeric: tabular-nums; }
+  .popover-stats .swatch { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+
+  #graph-truncation-note {
+    position: fixed; top: 18px; right: 18px; z-index: 20;
+    font-family: var(--mono); font-size: 10.5px; color: var(--warn);
+    background: var(--panel); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: 10px; padding: 7px 11px;
+  }
+
+  .graph-tooltip {
+    position: absolute; pointer-events: none;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--border-bright); border-radius: 10px; padding: 9px 12px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--text); display: none; z-index: 24;
+    max-width: 330px; box-shadow: var(--shadow-lg);
+  }
+  .graph-tooltip .t { color: var(--accent); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+
+  /* in-graph drawer */
+  #graph-drawer {
+    position: fixed; top: 74px; right: 14px; bottom: 76px; width: 360px; z-index: 26;
+    background: var(--panel); backdrop-filter: blur(20px);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    transform: translateX(calc(100% + 20px)); transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.25, 1);
+    overflow-y: auto; padding: 46px 18px 18px; box-shadow: var(--shadow-lg);
+  }
+  #graph-drawer.open { transform: translateX(0); }
+  #graph-drawer .drawer-close {
+    position: absolute; top: 12px; right: 12px;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
+    display: grid; place-items: center;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #graph-drawer .drawer-close:hover { color: var(--text); border-color: var(--border-bright); }
+  .drawer-nav { position: absolute; top: 12px; left: 14px; display: flex; gap: 4px; }
+  .drawer-nav-btn {
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    width: 26px; height: 26px; border-radius: 8px; cursor: pointer;
+    display: grid; place-items: center; transition: border-color 0.15s, color 0.15s;
+  }
+  .drawer-nav-btn:hover:not(:disabled) { color: var(--text); border-color: var(--border-bright); }
+  .drawer-nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+  /* ================= overlays (dashboard / explorer) ================= */
+  .overlay {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    padding-top: 72px;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(20px);
+  }
+  .overlay.open { display: block; }
+
+  #view-dashboard .dash-scroll, #view-api .dash-scroll { height: calc(100vh - 72px); overflow-y: auto; }
+  .dash-wrap { max-width: 1180px; margin: 0 auto; padding: 22px 32px 70px; }
+
+  .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+  .hero h1 { font-size: 25px; font-weight: 700; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+  .hero h1 .svc-name { color: var(--accent); font-family: var(--mono); }
+  .hero .sub { color: var(--text-dim); font-size: 13.5px; margin-top: 6px; max-width: 62ch; line-height: 1.55; }
+  .hero .meta { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); text-align: right; line-height: 1.8; white-space: nowrap; }
+
+  .plain-summary {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 22px; font-size: 14.5px; line-height: 1.75; color: var(--text-dim);
+  }
+  .plain-summary b { color: var(--text); font-weight: 600; }
+  .plain-summary .label {
+    display: block; font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--accent); margin-bottom: 9px;
+  }
+
+  .layer-strip {
+    display: flex; align-items: stretch; margin-bottom: 22px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow-x: auto;
+  }
+  .layer-cell { flex: 1; min-width: 128px; padding: 15px 18px; position: relative; cursor: pointer; transition: background 0.15s; }
+  .layer-cell:hover { background: var(--panel-raised); }
+  .layer-cell + .layer-cell { border-left: 1px solid var(--border); }
+  .layer-cell .n { font-family: var(--mono); font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .layer-cell .l { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); margin-top: 3px; }
+  .layer-cell .flow-arrow {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    z-index: 2; color: var(--text-faint); font-size: 12px;
+    background: var(--panel-solid); border: 1px solid var(--border);
+    border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center;
+  }
+
+  .dash-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .dash-columns { grid-template-columns: 1fr; } }
+  .dash-section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .dash-section.span-2 { grid-column: 1 / -1; }
+  .dash-section h2 {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-dim); font-weight: 600; margin: 0;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .dash-section h2 .count-pill { font-size: 10px; background: var(--panel-raised); border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; color: var(--text-faint); }
+  .dash-section h2 .dot { width: 7px; height: 7px; border-radius: 3px; }
+  .dash-list { max-height: 400px; overflow-y: auto; }
+  .insights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px 16px; }
+  .insight-col.span-2 { grid-column: 1 / -1; }
+  .insight-title { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+  .insight-caveat { font-weight: 400; color: var(--text-faint); font-size: 10px; }
+  @media (max-width: 720px) { .insights-grid { grid-template-columns: 1fr; } }
+  .dash-row {
+    display: grid; grid-template-columns: 60px 1fr auto; gap: 12px; align-items: center;
+    padding: 9px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12.5px; cursor: pointer; transition: background 0.12s;
+  }
+  .dash-row:last-child { border-bottom: none; }
+  .dash-row:hover { background: var(--panel-raised); }
+  .verb { font-size: 10px; font-weight: 700; padding: 3px 0; border-radius: 5px; text-align: center; letter-spacing: 0.04em; }
+  .verb-GET { color: var(--node-service); background: color-mix(in srgb, var(--node-service) 15%, transparent); }
+  .verb-POST { color: var(--node-controller); background: color-mix(in srgb, var(--node-controller) 15%, transparent); }
+  .verb-PUT { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+  .verb-DELETE { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+  .verb-PATCH { color: var(--node-entity); background: color-mix(in srgb, var(--node-entity) 15%, transparent); }
+  .dash-row .path { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dash-row .sub { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+  .dash-empty { padding: 20px 16px; color: var(--text-faint); font-family: var(--mono); font-size: 12px; }
+
+  /* explorer overlay */
+  #view-explorer .explorer-grid {
+    display: grid; grid-template-columns: 250px 1fr 380px;
+    height: calc(100vh - 72px);
+    max-width: 1400px; margin: 0 auto;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0; overflow: hidden;
+  }
+  nav.types { border-right: 1px solid var(--border); overflow-y: auto; padding: 12px 0; }
+  .type-group-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); padding: 10px 16px 6px; }
+  .type-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); border-left: 2px solid transparent; transition: background 0.12s; }
+  .type-row:hover { background: var(--panel-raised); color: var(--text); }
+  .type-row.active { background: var(--accent-glow); color: var(--accent); border-left-color: var(--accent); }
+  .type-row .count { font-variant-numeric: tabular-nums; color: var(--text-faint); font-size: 11px; }
+
+  main#node-list { overflow-y: auto; padding: 4px 0; }
+  .node-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: baseline; padding: 8px 16px; border-bottom: 1px solid var(--border); cursor: pointer; font-family: var(--mono); font-size: 12.5px; transition: background 0.12s; }
+  .node-row:hover { background: var(--panel-raised); }
+  .node-row.selected { background: var(--accent-glow); border-left: 2px solid var(--accent); padding-left: 14px; }
+  .node-row .badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+  .node-row .name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node-row .meta { color: var(--text-faint); font-size: 11px; white-space: nowrap; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--text-faint); font-family: var(--mono); font-size: 12.5px; }
+
+  aside.detail { border-left: 1px solid var(--border); overflow-y: auto; padding: 18px; }
+  aside.detail .placeholder { color: var(--text-faint); font-family: var(--mono); font-size: 12.5px; margin-top: 40px; text-align: center; }
+
+  .detail-type { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px; }
+  .detail-name { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--text); word-break: break-word; margin-bottom: 12px; padding-right: 26px; }
+  .detail-actions { display: flex; gap: 8px; margin-bottom: 4px; }
+  .detail-actions button {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    font-family: var(--mono); font-size: 11px; padding: 6px 11px; border-radius: 7px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .detail-actions button:hover { border-color: var(--border-bright); color: var(--text); }
+  .prov-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .prov-actions a, .prov-actions button {
+    display: flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); text-decoration: none;
+    background: var(--panel-raised); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 9px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .prov-actions a:hover, .prov-actions button:hover { border-color: var(--border-bright); color: var(--text); }
+  .prov-actions .copied { color: var(--accent) !important; border-color: var(--accent-dim) !important; }
+
+  .impact-summary { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 9px; padding: 11px 13px; margin-bottom: 14px; }
+  .impact-row { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; padding: 2px 0; }
+  .impact-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .impact-dot.up { background: var(--impact-up); }
+  .impact-dot.down { background: var(--impact-down); }
+  .impact-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
+  .impact-na { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); }
+  .detail-section-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 16px 0 6px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .attr-row { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; font-family: var(--mono); }
+  .attr-row .k { color: var(--text-faint); min-width: 100px; flex-shrink: 0; }
+  .attr-row .v { color: var(--text-dim); word-break: break-word; }
+  .prov-link { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; margin-top: 2px; }
+  .prov-link .file { color: var(--accent); }
+  .blame-line { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 11px; margin-top: 6px; }
+  .blame-line b { color: var(--text-dim); font-weight: 600; }
+
+  /* API schema — request/response "model" cards, swagger-style */
+  .api-schema { display: flex; flex-direction: column; gap: 8px; }
+  .schema-block { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .schema-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .schema-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+  .schema-type { font-family: var(--mono); font-size: 11px; color: var(--accent); cursor: pointer; }
+  .schema-type:hover { text-decoration: underline; }
+  .schema-copy {
+    margin-left: auto; background: none; border: 1px solid var(--border); color: var(--text-faint);
+    width: 22px; height: 22px; border-radius: 6px; cursor: pointer; display: grid; place-items: center;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .schema-copy:hover { color: var(--text); border-color: var(--border-bright); }
+  .schema-copy.copied { color: var(--accent); border-color: var(--accent-dim); }
+  .schema-body { padding: 2px 0; }
+  .schema-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 10px; font-family: var(--mono); font-size: 12px; border-bottom: 1px solid var(--border); }
+  .schema-row:last-child { border-bottom: none; }
+  .schema-row .fname { color: var(--text); }
+  .schema-row .ftype { color: var(--text-faint); }
+  .schema-row.schema-empty { color: var(--text-faint); font-style: italic; justify-content: flex-start; }
+
+  .json-block {
+    margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.6;
+    color: var(--text-dim); background: var(--panel-solid); overflow-x: auto; white-space: pre;
+    border-bottom: 1px solid var(--border);
+  }
+  .json-key { color: var(--node-service); }
+  .json-str { color: var(--node-controller); }
+  .json-num { color: var(--node-repository); }
+  .json-bool { color: var(--node-entity); }
+  .json-null { color: var(--text-faint); font-style: italic; }
+
+  .schema-fields { font-family: var(--mono); font-size: 11.5px; }
+  .schema-fields summary {
+    padding: 6px 10px; cursor: pointer; color: var(--text-faint); list-style: none;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .schema-fields summary::before { content: "▸"; font-size: 9px; }
+  .schema-fields[open] summary::before { content: "▾"; }
+  .schema-fields summary::-webkit-details-marker { display: none; }
+
+  .curl-btn {
+    display: flex; align-items: center; gap: 6px; margin-top: 2px;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    font-family: var(--mono); font-size: 11px; padding: 6px 10px; border-radius: 7px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .curl-btn:hover { border-color: var(--border-bright); color: var(--text); }
+  .curl-btn.copied { color: var(--accent); border-color: var(--accent-dim); }
+
+  /* request flow trace — a lightweight sequence view */
+  .trace { position: relative; margin: 4px 0 18px; }
+  .trace-step { position: relative; display: flex; gap: 12px; padding-bottom: 16px; }
+  .trace-step:last-child { padding-bottom: 0; }
+  .trace-step:not(:last-child)::before {
+    content: ""; position: absolute; left: 5px; top: 14px; bottom: -2px; width: 1px; background: var(--border-bright);
+  }
+  .trace-marker { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; z-index: 1; box-shadow: 0 0 0 3px var(--panel); }
+  .trace-content { flex: 1; cursor: pointer; }
+  .trace-content:hover .trace-label { text-decoration: underline; }
+  .trace-label { font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+  .trace-sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+
+  /* API reference tab */
+  .api-search { width: 100%; margin-bottom: 16px; background: var(--panel-raised); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 9px 13px; border-radius: 9px; outline: none; }
+  .api-search:focus { border-color: var(--accent-dim); }
+  .api-group { margin-bottom: 18px; }
+  .api-group-title { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--text); margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+  .api-group-title .count { color: var(--text-faint); font-weight: 400; font-size: 11px; }
+  .api-endpoint { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+  .api-endpoint-head { display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; }
+  .api-endpoint-head:hover { background: var(--panel-raised); }
+  .api-endpoint-head .path { font-family: var(--mono); font-size: 13px; color: var(--text); flex: 1; }
+  .api-endpoint-head .chev { color: var(--text-faint); transition: transform 0.15s; flex-shrink: 0; }
+  .security-badge { display: flex; align-items: center; flex-shrink: 0; }
+  .security-badge.secured { color: var(--accent); }
+  .security-badge.unsecured { color: var(--warn); }
+  .api-endpoint.open .chev { transform: rotate(90deg); }
+  .api-endpoint-body { display: none; padding: 4px 14px 16px; border-top: 1px solid var(--border); }
+  .api-endpoint.open .api-endpoint-body { display: block; }
+  .api-endpoint-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; margin: 12px 0; }
+  .api-endpoint-meta { display: flex; gap: 14px; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); margin-top: 10px; }
+  .edge-list { display: flex; flex-direction: column; gap: 3px; }
+  .edge-item { display: flex; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
+  .edge-item:hover { background: var(--panel-raised); }
+  .edge-item .dir { color: var(--text-faint); width: 14px; text-align: center; flex-shrink: 0; }
+  .edge-item .etype { color: var(--warn); font-size: 10px; text-transform: uppercase; flex-shrink: 0; }
+  .edge-item .target { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ================= command palette ================= */
+  #palette-overlay {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    background: rgba(4, 6, 9, 0.6); backdrop-filter: blur(4px);
+    align-items: flex-start; justify-content: center; padding-top: 12vh;
+  }
+  #palette-overlay.open { display: flex; }
+  #palette {
+    width: min(620px, 92vw);
+    background: var(--panel-solid); border: 1px solid var(--border-bright);
+    border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  #palette input {
+    width: 100%; background: none; border: none; outline: none;
+    color: var(--text); font-family: var(--mono); font-size: 15px;
+    padding: 16px 18px; border-bottom: 1px solid var(--border);
+  }
+  #palette input::placeholder { color: var(--text-faint); }
+  #palette-results { max-height: 46vh; overflow-y: auto; padding: 6px; }
+  .palette-item {
+    display: grid; grid-template-columns: 84px 1fr auto; gap: 12px; align-items: center;
+    padding: 9px 12px; border-radius: 9px; cursor: pointer;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .palette-item .ptype { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); display: flex; align-items: center; gap: 3px; }
+  .palette-item .ptype svg { width: 9px; height: 9px; color: var(--warn); flex-shrink: 0; }
+  .palette-item .pname { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .palette-item .pmeta { color: var(--text-faint); font-size: 10.5px; }
+  .palette-item.active { background: var(--accent-glow); }
+  .palette-item.active .ptype { color: var(--accent); }
+  .palette-footer { display: flex; gap: 14px; padding: 9px 16px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .palette-footer .kbd { border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin-right: 4px; }
+
+  /* onboarding walkthrough — first-visit orientation so the tool doesn't open on an
+     unexplained wall of graphs and jargon */
+  #onboarding-overlay {
+    position: fixed; inset: 0; z-index: 110; display: none;
+    background: rgba(4, 6, 9, 0.65); backdrop-filter: blur(5px);
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  #onboarding-overlay.open { display: flex; }
+  #onboarding-modal {
+    width: min(520px, 100%); max-height: 88vh; overflow-y: auto;
+    background: var(--panel-solid); border: 1px solid var(--border-bright);
+    border-radius: 16px; box-shadow: var(--shadow-lg); padding: 26px 28px;
+  }
+  .onboarding-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 10px; color: var(--text); }
+  .onboarding-intro { font-size: 13.5px; line-height: 1.65; color: var(--text-dim); margin-bottom: 18px; }
+  .onboarding-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+  .onboarding-item b { color: var(--text); }
+  .onboarding-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
+  .onboarding-item .kbd { border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-family: var(--mono); font-size: 11px; color: var(--text); }
+  .onboarding-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .onboarding-actions button {
+    font-family: var(--mono); font-size: 12.5px; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .onboarding-actions button:hover { border-color: var(--border-bright); color: var(--text); }
+  .onboarding-actions button.primary { background: var(--accent); border-color: var(--accent); color: #0a0c10; font-weight: 600; }
+  .onboarding-actions button.primary:hover { opacity: 0.9; }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 5px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- full-page living graph = home -->
+<div id="graph-layer">
+  <canvas id="graph-canvas"></canvas>
+  <div class="graph-tooltip" id="graph-tooltip"></div>
+</div>
+
+<header>
+  <span class="brand"><span class="logo">C</span>Cartograph <span class="svc" id="brand-svc"></span></span>
+  <div class="tabs">
+    <button class="tab-btn active" data-view="graph">Graph<span class="key">1</span></button>
+    <button class="tab-btn" data-view="dashboard">Dashboard<span class="key">2</span></button>
+    <button class="tab-btn" data-view="explorer">Explorer<span class="key">3</span></button>
+    <button class="tab-btn" data-view="api">API<span class="key">4</span></button>
+  </div>
+  <button class="palette-btn" id="open-palette">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span>Jump to anything…</span><span class="kbd">Ctrl K</span>
+  </button>
+  <button class="icon-btn" id="theme-toggle" title="Toggle light/dark theme">
+    <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8"/></svg>
+    <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
+  </button>
+  <button class="icon-btn" id="onboarding-replay-btn" title="What am I looking at? (show the intro again)">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </button>
+</header>
+
+<div class="graph-controls">
+  <select id="graph-scope">
+    <option value="all">Whole system</option>
+    <option value="controllers">Controllers → Services</option>
+    <option value="services">Services → Data/Clients</option>
+    <option value="external">External dependencies</option>
+  </select>
+  <div class="legend" id="graph-legend"></div>
+  <div class="settings-anchor">
+    <button class="icon-btn" id="graph-settings-btn" title="Graph settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <div class="popover" id="graph-settings-popover">
+      <div class="popover-row">
+        <button id="graph-reset" title="Re-run the layout simulation">Re-layout</button>
+        <button id="graph-center" title="Fit graph to view">Fit view</button>
+      </div>
+      <label class="popover-check"><input type="checkbox" id="graph-physics" checked /> Physics simulation</label>
+      <div class="popover-divider"></div>
+      <div class="popover-label">Color by</div>
+      <select id="graph-color-mode" title="Color nodes by architectural role, or by Java package to see module boundaries">
+        <option value="layer" selected>Layer (role)</option>
+        <option value="package">Package</option>
+      </select>
+      <div class="popover-divider"></div>
+      <label class="popover-check" title="Trace what a change to the focused node would affect (downstream) and what depends on it (upstream)">
+        <input type="checkbox" id="impact-toggle" /> Impact radius
+      </label>
+      <select id="impact-depth" title="How many hops to trace" style="display:none">
+        <option value="1">1 hop</option>
+        <option value="2" selected>2 hops</option>
+        <option value="3">3 hops</option>
+        <option value="999">All hops</option>
+      </select>
+      <div class="popover-divider"></div>
+      <div class="popover-label">System</div>
+      <div class="popover-stats" id="popover-stats"></div>
+    </div>
+  </div>
+  <button class="icon-btn" id="graph-help" title="Scroll to zoom&#10;Drag canvas to pan, drag a node to pin it&#10;Click a node to inspect, double-click to open in Explorer&#10;Esc closes the drawer">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </button>
+</div>
+
+<aside id="graph-drawer">
+  <div class="drawer-nav">
+    <button class="drawer-nav-btn" id="drawer-back" title="Back" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="drawer-nav-btn" id="drawer-forward" title="Forward" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <button class="drawer-close" id="drawer-close" title="Close (Esc)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+  </button>
+  <div id="drawer-content"></div>
+</aside>
+
+<!-- dashboard overlay -->
+<div class="overlay" id="view-dashboard">
+  <div class="dash-scroll"><div class="dash-wrap" id="dash-content"></div></div>
+</div>
+
+<!-- API reference overlay (swagger-like) -->
+<div class="overlay" id="view-api">
+  <div class="dash-scroll"><div class="dash-wrap" id="api-content"></div></div>
+</div>
+
+<!-- explorer overlay -->
+<div class="overlay" id="view-explorer">
+  <div class="explorer-grid">
+    <nav class="types" id="type-nav"></nav>
+    <main id="node-list"></main>
+    <aside class="detail" id="detail-panel">
+      <div class="placeholder">Select a node to inspect it.</div>
+    </aside>
+  </div>
+</div>
+
+<div id="palette-overlay">
+  <div id="palette">
+    <input type="text" id="palette-input" placeholder="Search classes, endpoints, topics, config…" autocomplete="off" />
+    <div id="palette-results"></div>
+    <div class="palette-footer">
+      <span><span class="kbd">↑↓</span>navigate</span>
+      <span><span class="kbd">↵</span>open</span>
+      <span><span class="kbd">esc</span>close</span>
+    </div>
+  </div>
+</div>
+
+<div id="onboarding-overlay">
+  <div id="onboarding-modal">
+    <div class="onboarding-title">Welcome to Cartograph</div>
+    <div class="onboarding-intro">This is an automatically generated map of your codebase — built entirely from static analysis, so every fact here traces back to a real file and line, not a guess. Here's what each tab is for:</div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--accent)"></div>
+      <div><b>Dashboard</b> — start here. A plain-English summary of what this service does, its key numbers, and a health check flagging anything that looks off.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--node-service)"></div>
+      <div><b>Graph</b> — a visual, moving map of every class and how they connect. Click any node to inspect it; drag to pan, scroll to zoom.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--node-controller)"></div>
+      <div><b>API</b> — every REST endpoint, like a Swagger page, with real request/response examples and a "Copy as cURL" button.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--node-repository)"></div>
+      <div><b>Explorer</b> — a searchable list of literally everything: every class, method, config key, and table.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--text-faint)"></div>
+      <div>Press <span class="kbd">Ctrl K</span> anytime, from anywhere, to jump straight to any class, endpoint, or config key by name.</div>
+    </div>
+    <div class="onboarding-actions">
+      <button id="onboarding-skip">Skip</button>
+      <button id="onboarding-start" class="primary">Take me to the Dashboard</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/*__GRAPH_DATA__*/
+
+/* ============================== shared indices ============================== */
+const nodesById = new Map(GRAPH_DATA.nodes.map(n => [n.id, n]));
+const outgoing = new Map();
+const incoming = new Map();
+for (const e of GRAPH_DATA.edges) {
+  if (!outgoing.has(e.source)) outgoing.set(e.source, []);
+  if (!incoming.has(e.target)) incoming.set(e.target, []);
+  outgoing.get(e.source).push(e);
+  incoming.get(e.target).push(e);
+}
+const typeCounts = new Map();
+for (const n of GRAPH_DATA.nodes) typeCounts.set(n.type, (typeCounts.get(n.type) || 0) + 1);
+
+function stereotypeOf(n) { return (n.attributes && n.attributes.springStereotype) || null; }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function truncate(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+const ICON_GRAPH = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="6" r="2.6"/><circle cx="12" cy="18" r="2.6"/><line x1="8" y1="7.3" x2="10.3" y2="15.7"/><line x1="16" y1="7.3" x2="13.7" y2="15.7"/></svg>';
+const ICON_EXTERNAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>';
+const ICON_EDITOR = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+const ICON_COPY = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const ICON_MARKDOWN = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>';
+const ICON_LINK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+const ICON_TERMINAL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+const ICON_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+const ICON_DOWNLOAD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+const ICON_CLOCK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+const ICON_STAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const ICON_STAR_FILLED = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const ICON_LOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+const ICON_UNLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+
+/** Best-effort "open in editor" deep link — works when VS Code is installed and its vscode:// protocol handler is registered (the common case for local dev). Absent repoRoot metadata (older exports), no link is offered. */
+function vscodeUri(provenance) {
+  const root = GRAPH_DATA.meta && GRAPH_DATA.meta.repoRoot;
+  if (!root || !provenance) return null;
+  const line = provenance.line >= 0 ? ":" + provenance.line : "";
+  return `vscode://file/${root}/${provenance.file}${line}`;
+}
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).catch(() => {});
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.classList.add("copied");
+  btn.innerHTML = "Copied";
+  setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = original; }, 1200);
+}
+
+/** Formats a node plus its immediate relationships as Markdown — meant for pasting into a PR
+ *  description, a Slack thread, or an AI chat when asking "explain this component". */
+function buildMarkdownContext(id) {
+  const node = nodesById.get(id);
+  if (!node) return "";
+  const lines = [`### ${node.name}`, `- **Type**: ${node.type}${stereotypeOf(node) ? " (" + stereotypeOf(node) + ")" : ""}`];
+  if (node.provenance) lines.push(`- **Location**: \`${node.provenance.file}${node.provenance.line >= 0 ? ":" + node.provenance.line : ""}\``);
+  const attrs = Object.entries(node.attributes || {}).filter(([k, v]) => v !== null && v !== undefined && String(v).length > 0);
+  if (attrs.length) {
+    lines.push(`- **Attributes**:`);
+    for (const [k, v] of attrs) lines.push(`  - ${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
+  }
+  const out = outgoing.get(id) || [], inc = incoming.get(id) || [];
+  if (out.length) {
+    lines.push(`- **Depends on / calls**:`);
+    for (const e of out) lines.push(`  - [${e.type}] ${(nodesById.get(e.target) || {}).name || e.target}`);
+  }
+  if (inc.length) {
+    lines.push(`- **Used by**:`);
+    for (const e of inc) lines.push(`  - [${e.type}] ${(nodesById.get(e.source) || {}).name || e.source}`);
+  }
+  return lines.join("\n");
+}
+
+const serviceName = (nodesById.get("CONFIG:spring.application.name") || {}).attributes?.value || null;
+if (serviceName) document.getElementById("brand-svc").innerHTML = "/ <b>" + escapeHtml(serviceName) + "</b>";
+
+/* ============================== theme ============================== */
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("cartograph-theme"); } catch (e) {}
+  if (saved) document.documentElement.dataset.theme = saved;
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    const cur = document.documentElement.dataset.theme
+      || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("cartograph-theme", next); } catch (e) {}
+  });
+})();
+function isDarkTheme() {
+  const t = document.documentElement.dataset.theme;
+  if (t) return t === "dark";
+  return !matchMedia("(prefers-color-scheme: light)").matches;
+}
+
+/* ============================== views ============================== */
+function switchTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  document.getElementById("view-dashboard").classList.toggle("open", name === "dashboard");
+  document.getElementById("view-explorer").classList.toggle("open", name === "explorer");
+  document.getElementById("view-api").classList.toggle("open", name === "api");
+  if (name === "graph") graphState.needsResize = true;
+  if (name === "api" && !apiState.rendered) renderApiReference();
+}
+document.querySelectorAll(".tab-btn").forEach(btn =>
+  btn.addEventListener("click", () => switchTab(btn.dataset.view)));
+
+window.addEventListener("keydown", e => {
+  const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }
+  if (typing) return;
+  if (e.key === "1") switchTab("graph");
+  if (e.key === "2") switchTab("dashboard");
+  if (e.key === "3") switchTab("explorer");
+  if (e.key === "4") switchTab("api");
+  if (e.key === "Escape") {
+    if (document.getElementById("onboarding-overlay").classList.contains("open")) { closeOnboarding(); return; }
+    if (paletteState.open) { closePalette(); return; }
+    const popover = document.getElementById("graph-settings-popover");
+    if (popover.classList.contains("open")) { popover.classList.remove("open"); return; }
+    if (document.getElementById("graph-drawer").classList.contains("open")) { closeDrawer(); return; }
+    switchTab("graph");
+  }
+});
+
+/* ============================== dashboard ============================== */
+/* ============================== architecture insights ============================== */
+const LAYER_STEREOTYPES = ["controller", "service", "repository", "component"];
+
+/** Bounded-depth DFS (max chain length 4) for cycles among service/repo/component/controller
+ *  INJECTS edges — the classic "A depends on B depends on A" smell. Bounding depth keeps this
+ *  fast and keeps reported cycles short and readable rather than chasing long transitive chains. */
+function findCircularDependencies() {
+  const relevant = GRAPH_DATA.nodes.filter(n => (n.type === "CLASS" || n.type === "INTERFACE") && LAYER_STEREOTYPES.includes(stereotypeOf(n)));
+  const idSet = new Set(relevant.map(n => n.id));
+  const adj = new Map();
+  for (const e of GRAPH_DATA.edges) {
+    if (e.type !== "INJECTS" || e.source === e.target || !idSet.has(e.source) || !idSet.has(e.target)) continue;
+    if (!adj.has(e.source)) adj.set(e.source, new Set());
+    adj.get(e.source).add(e.target);
+  }
+  const cycles = [];
+  const seenKeys = new Set();
+  function dfs(start, current, path, depth) {
+    if (depth > 4) return;
+    for (const next of (adj.get(current) || [])) {
+      if (next === start && path.length >= 2) {
+        const key = [...path].sort().join("|");
+        if (!seenKeys.has(key)) { seenKeys.add(key); cycles.push([...path]); }
+        continue;
+      }
+      if (path.includes(next)) continue;
+      dfs(start, next, [...path, next], depth + 1);
+    }
+  }
+  for (const n of relevant) dfs(n.id, n.id, [n.id], 1);
+  return cycles.slice(0, 15);
+}
+
+/** Controllers injecting a repository directly skip the service layer — a common layering
+ *  violation that makes business logic hard to find and test in isolation. */
+function findLayeringViolations() {
+  const violations = [];
+  for (const e of GRAPH_DATA.edges) {
+    if (e.type !== "INJECTS") continue;
+    const source = nodesById.get(e.source), target = nodesById.get(e.target);
+    if (source && target && stereotypeOf(source) === "controller" && stereotypeOf(target) === "repository") {
+      violations.push({ source, target });
+    }
+  }
+  return violations;
+}
+
+/** An endpoint whose response type is itself a JPA @Entity means the persistence model is the
+ *  API contract — schema changes to the DB table now break API consumers directly. */
+function findLeakyEntities() {
+  const leaks = [];
+  for (const ep of GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT")) {
+    const core = unwrapType(ep.attributes.returnType);
+    if (!core) continue;
+    const classNode = findClassNodeBySimpleName(core);
+    if (!classNode) continue;
+    const isEntity = (outgoing.get(classNode.id) || []).some(e => e.type === "MAPS_TO");
+    if (isEntity) leaks.push({ endpoint: ep, entity: classNode });
+  }
+  return leaks;
+}
+
+/** Services/repos/components with no incoming references found anywhere in the analyzed
+ *  code — candidates for deletion, though static analysis can't see reflection, so this is a
+ *  lead to verify, not a verdict. */
+function findUnreferencedComponents() {
+  const stereos = ["service", "repository", "component"];
+  const usageEdgeTypes = new Set(["INJECTS", "DEPENDS_ON", "EXPOSES", "LISTENS_TO", "PUBLISHES_TO"]);
+  return GRAPH_DATA.nodes.filter(n => {
+    if ((n.type !== "CLASS" && n.type !== "INTERFACE") || !stereos.includes(stereotypeOf(n))) return false;
+    const inc = incoming.get(n.id) || [];
+    return !inc.some(e => usageEdgeTypes.has(e.type));
+  });
+}
+
+/** Classes ranked by total connections (fan-in + fan-out) — the highest-coupling classes are
+ *  usually where a change has the widest blast radius, and often refactoring candidates. */
+function findHotspots(limit = 8) {
+  return GRAPH_DATA.nodes
+    .filter(n => n.type === "CLASS" || n.type === "INTERFACE")
+    .map(n => ({ node: n, degree: (incoming.get(n.id) || []).length + (outgoing.get(n.id) || []).length }))
+    .filter(x => x.degree > 0)
+    .sort((a, b) => b.degree - a.degree)
+    .slice(0, limit);
+}
+
+/** Endpoints with no @PreAuthorize/@Secured/@RolesAllowed/@PermitAll detected at the method or
+ *  class level. This is a lead, not a verdict — a global security filter chain or API gateway
+ *  can enforce auth without any method-level annotation, which this can't see. */
+function findUnprotectedEndpoints() {
+  return GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT" && !n.attributes.securityRule);
+}
+
+function renderInsightsHtml() {
+  const cycles = findCircularDependencies();
+  const violations = findLayeringViolations();
+  const leaks = findLeakyEntities();
+  const dead = findUnreferencedComponents();
+  const hotspots = findHotspots();
+  const unprotected = findUnprotectedEndpoints();
+  const issueCount = cycles.length + violations.length + leaks.length;
+
+  const cycleRows = cycles.length
+    ? cycles.map(c => `<div class="dash-row" data-id="${escapeHtml(c[0])}">
+        <span class="verb" style="color:var(--danger);background:color-mix(in srgb, var(--danger) 15%, transparent)">CYCLE</span>
+        <span class="path">${c.map(id => escapeHtml((nodesById.get(id) || {}).name || id)).join(" → ")}</span>
+        <span class="sub">${c.length} classes</span>
+      </div>`).join("")
+    : `<div class="dash-empty">No circular dependencies found.</div>`;
+
+  const violationRows = violations.length
+    ? violations.map(v => `<div class="dash-row" data-id="${escapeHtml(v.source.id)}">
+        <span class="verb" style="color:var(--warn);background:color-mix(in srgb, var(--warn) 15%, transparent)">LAYER</span>
+        <span class="path">${escapeHtml(v.source.name)} → ${escapeHtml(v.target.name)}</span>
+        <span class="sub">skips the service layer</span>
+      </div>`).join("")
+    : `<div class="dash-empty">No controllers inject repositories directly.</div>`;
+
+  const leakRows = leaks.length
+    ? leaks.map(l => `<div class="dash-row" data-id="${escapeHtml(l.endpoint.id)}">
+        <span class="verb" style="color:var(--node-entity);background:color-mix(in srgb, var(--node-entity) 15%, transparent)">LEAK</span>
+        <span class="path">${escapeHtml(l.endpoint.attributes.httpMethod)} ${escapeHtml(l.endpoint.attributes.path)}</span>
+        <span class="sub">returns entity ${escapeHtml(l.entity.name)}</span>
+      </div>`).join("")
+    : `<div class="dash-empty">No endpoints return JPA entities directly.</div>`;
+
+  const deadRows = dead.length
+    ? dead.slice(0, 20).map(n => `<div class="dash-row" data-id="${escapeHtml(n.id)}">
+        <span class="verb" style="color:var(--text-faint);background:var(--panel-raised)">UNUSED</span>
+        <span class="path">${escapeHtml(n.name)}</span>
+        <span class="sub">${escapeHtml(stereotypeOf(n) || "")}</span>
+      </div>`).join("")
+    : `<div class="dash-empty">Everything has at least one static reference.</div>`;
+
+  const hotspotRows = hotspots.length
+    ? hotspots.map(h => `<div class="dash-row" data-id="${escapeHtml(h.node.id)}">
+        <span class="verb" style="color:var(--accent);background:var(--accent-glow)">${h.degree}</span>
+        <span class="path">${escapeHtml(h.node.name)}</span>
+        <span class="sub">${escapeHtml(stereotypeOf(h.node) || h.node.type.toLowerCase())} · connections</span>
+      </div>`).join("")
+    : `<div class="dash-empty">Not enough connections to rank.</div>`;
+
+  const unprotectedRows = unprotected.length
+    ? unprotected.map(ep => `<div class="dash-row" data-id="${escapeHtml(ep.id)}">
+        <span class="verb verb-${ep.attributes.httpMethod}">${ep.attributes.httpMethod}</span>
+        <span class="path">${escapeHtml(ep.attributes.path)}</span>
+        <span class="sub">no @PreAuthorize/@Secured found</span>
+      </div>`).join("")
+    : `<div class="dash-empty">Every endpoint has a method or class-level security annotation.</div>`;
+
+  return `
+    <div class="dash-section span-2">
+      <h2><span class="dot" style="background:var(--danger);color:var(--danger)"></span>Architecture Insights <span class="count-pill">${issueCount} issue${issueCount === 1 ? "" : "s"}</span></h2>
+      <div class="insights-grid">
+        <div class="insight-col">
+          <div class="insight-title">Circular dependencies</div>
+          <div class="dash-list">${cycleRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Layering violations</div>
+          <div class="dash-list">${violationRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Entities leaked via API</div>
+          <div class="dash-list">${leakRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Unreferenced <span class="insight-caveat">— verify before removing, reflection/DI edge cases aren't visible here</span></div>
+          <div class="dash-list">${deadRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Unprotected endpoints <span class="insight-caveat">— a filter chain or gateway may still enforce auth outside these annotations</span></div>
+          <div class="dash-list">${unprotectedRows}</div>
+        </div>
+        <div class="insight-col">
+          <div class="insight-title">Most coupled classes</div>
+          <div class="dash-list">${hotspotRows}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/** A short, plain-English paragraph describing the service — the thing to read first, before
+ *  any graph or table, so someone unfamiliar with the codebase (or the tool) understands what
+ *  they're looking at in ten seconds instead of having to interpret diagrams and jargon. */
+function buildPlainEnglishSummary() {
+  const name = serviceName || "This service";
+  const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
+  const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
+  const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
+  const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+  const jobs = GRAPH_DATA.nodes.filter(n => n.type === "SCHEDULED_JOB");
+  const cycles = findCircularDependencies();
+  const violations = findLayeringViolations();
+  const leaks = findLeakyEntities();
+  const issueCount = cycles.length + violations.length + leaks.length;
+
+  const sentences = [];
+
+  sentences.push(endpoints.length
+    ? `<b>${escapeHtml(name)}</b> exposes <b>${endpoints.length}</b> REST endpoint${endpoints.length === 1 ? "" : "s"} across <b>${controllers.length}</b> controller${controllers.length === 1 ? "" : "s"}.`
+    : `<b>${escapeHtml(name)}</b> doesn't expose any REST endpoints that static analysis could detect.`);
+
+  if (services.length) sentences.push(`Its business logic lives in <b>${services.length}</b> service class${services.length === 1 ? "" : "es"}.`);
+  if (tables.length) sentences.push(`It persists data in <b>${tables.length}</b> database table${tables.length === 1 ? "" : "s"}.`);
+
+  if (externals.length) {
+    const names = externals.slice(0, 3).map(e => escapeHtml(e.name)).join(", ");
+    sentences.push(`It talks to <b>${externals.length}</b> external system${externals.length === 1 ? "" : "s"} (${names}${externals.length > 3 ? ", …" : ""}).`);
+  }
+  if (topics.length) sentences.push(`It exchanges messages through <b>${topics.length}</b> Kafka topic${topics.length === 1 ? "" : "s"}/queue${topics.length === 1 ? "" : "s"}.`);
+  if (jobs.length) sentences.push(`It runs <b>${jobs.length}</b> background job${jobs.length === 1 ? "" : "s"} on a schedule.`);
+
+  sentences.push(issueCount === 0
+    ? `No architecture red flags were found — no circular dependencies, no layering violations, no leaked entities.`
+    : `<b>${issueCount}</b> potential architecture issue${issueCount === 1 ? "" : "s"} ${issueCount === 1 ? "was" : "were"} found — see "Architecture Insights" below.`);
+
+  return sentences.join(" ");
+}
+
+function renderDashboard() {
+  const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
+  const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
+  const repositories = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "repository" || stereotypeOf(n) === "feignClient");
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+  const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
+  const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
+  const configProps = GRAPH_DATA.nodes.filter(n => n.type === "CONFIG_PROPERTY");
+  const classes = GRAPH_DATA.nodes.filter(n => n.type === "CLASS" || n.type === "INTERFACE");
+  const jobs = GRAPH_DATA.nodes.filter(n => n.type === "SCHEDULED_JOB");
+
+  const layers = [
+    { n: endpoints.length, l: "Endpoints", color: "--accent", type: "ENDPOINT" },
+    { n: controllers.length, l: "Controllers", color: "--node-controller", stereo: "controller" },
+    { n: services.length, l: "Services", color: "--node-service", stereo: "service" },
+    { n: repositories.length, l: "Repos & Clients", color: "--node-repository", stereo: "repository" },
+    { n: externals.length + tables.length + topics.length, l: "External Systems", color: "--node-external", type: "EXTERNAL_SERVICE" },
+  ];
+  const layerHtml = layers.map((x, i) => `
+    <div class="layer-cell" data-type="${x.type || ''}" data-stereo="${x.stereo || ''}">
+      <div class="n" style="color:var(${x.color})">${x.n.toLocaleString()}</div>
+      <div class="l">${x.l}</div>
+      ${i < layers.length - 1 ? '<span class="flow-arrow">→</span>' : ''}
+    </div>`).join("");
+
+  const verbOrder = { GET: 0, POST: 1, PUT: 2, PATCH: 3, DELETE: 4 };
+  const sortedEndpoints = [...endpoints].sort((a, b) => {
+    const va = verbOrder[a.attributes.httpMethod] ?? 9, vb = verbOrder[b.attributes.httpMethod] ?? 9;
+    return va - vb || a.attributes.path.localeCompare(b.attributes.path);
+  });
+  const endpointRows = sortedEndpoints.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb verb-${n.attributes.httpMethod}">${n.attributes.httpMethod}</span>
+      <span class="path">${escapeHtml(n.attributes.path)}</span>
+      <span class="sub">${escapeHtml((n.attributes.handlerClass || "").split(".").pop() || "")}.${escapeHtml(n.attributes.handlerMethod || "")}</span>
+    </div>`).join("") || `<div class="dash-empty">No REST endpoints detected.</div>`;
+
+  const extRows = externals.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-external);background:color-mix(in srgb, var(--node-external) 15%, transparent)">${n.type === 'DATABASE' ? 'DB' : 'HTTP'}</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${escapeHtml(n.attributes.via || n.attributes.declaredName || "")}</span>
+    </div>`).join("") || `<div class="dash-empty">No external dependencies detected.</div>`;
+
+  const topicRows = topics.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-topic);background:color-mix(in srgb, var(--node-topic) 15%, transparent)">TOPIC</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${(incoming.get(n.id)||[]).filter(e=>e.type==='PUBLISHES_TO').length} in · ${(outgoing.get(n.id)||[]).filter(e=>e.type==='LISTENS_TO').length} out</span>
+    </div>`).join("") || `<div class="dash-empty">No messaging topics/queues detected.</div>`;
+
+  const jobRows = jobs.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-repository);background:color-mix(in srgb, var(--node-repository) 15%, transparent)">JOB</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${escapeHtml(n.attributes.schedule || "")}</span>
+    </div>`).join("") || `<div class="dash-empty">No @Scheduled background jobs detected.</div>`;
+
+  const tableRows = tables.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-entity);background:color-mix(in srgb, var(--node-entity) 15%, transparent)">TABLE</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${(incoming.get(n.id)||[]).length} refs</span>
+    </div>`).join("") || `<div class="dash-empty">No JPA entities/tables detected.</div>`;
+
+  const controllerRows = controllers.map(n => {
+    const injected = GRAPH_DATA.edges.filter(e => e.type === "INJECTS" && e.source === n.id).length;
+    return `<div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-controller);background:color-mix(in srgb, var(--node-controller) 15%, transparent)">CTRL</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${injected} deps</span>
+    </div>`;
+  }).join("") || `<div class="dash-empty">No controllers detected.</div>`;
+
+  const svcRows = services.map(n => {
+    const injected = GRAPH_DATA.edges.filter(e => e.type === "INJECTS" && e.source === n.id).length;
+    const injectedBy = GRAPH_DATA.edges.filter(e => e.type === "INJECTS" && e.target === n.id).length;
+    return `<div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-service);background:color-mix(in srgb, var(--node-service) 15%, transparent)">SVC</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${injected} out · ${injectedBy} in</span>
+    </div>`;
+  }).join("") || `<div class="dash-empty">No services detected.</div>`;
+
+  document.getElementById("dash-content").innerHTML = `
+    <div class="hero">
+      <div>
+        <h1>${serviceName ? `<span class="svc-name">${escapeHtml(serviceName)}</span>` : "Service"} — architecture at a glance</h1>
+        <div class="sub">Auto-generated knowledge graph from static analysis — no AI, every fact traceable to file and line. Click anything to drill in, or press <b>Ctrl K</b> to jump straight to a class, endpoint, or config key.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="meta">
+          ${classes.length.toLocaleString()} classes · ${configProps.length.toLocaleString()} config keys<br />
+          graph: ${GRAPH_DATA.nodes.length.toLocaleString()} nodes / ${GRAPH_DATA.edges.length.toLocaleString()} edges
+        </div>
+        <button class="curl-btn" id="copy-ai-context-btn" title="Copy a full system summary formatted for pasting into an LLM chat">${ICON_MARKDOWN} Copy AI context</button>
+      </div>
+    </div>
+    <div class="plain-summary">
+      <span class="label">In plain English</span>
+      ${buildPlainEnglishSummary()}
+    </div>
+    <div class="layer-strip">${layerHtml}</div>
+    <div class="dash-columns">
+      ${renderInsightsHtml()}
+      <div class="dash-section span-2">
+        <h2><span class="dot" style="background:var(--accent);color:var(--accent)"></span>REST Endpoints <span class="count-pill">${endpoints.length}</span></h2>
+        <div class="dash-list">${endpointRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-controller);color:var(--node-controller)"></span>Controllers <span class="count-pill">${controllers.length}</span></h2>
+        <div class="dash-list">${controllerRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-service);color:var(--node-service)"></span>Services <span class="count-pill">${services.length}</span></h2>
+        <div class="dash-list">${svcRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-external);color:var(--node-external)"></span>External Dependencies <span class="count-pill">${externals.length}</span></h2>
+        <div class="dash-list">${extRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-topic);color:var(--node-topic)"></span>Messaging <span class="count-pill">${topics.length}</span></h2>
+        <div class="dash-list">${topicRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-repository);color:var(--node-repository)"></span>Scheduled Jobs <span class="count-pill">${jobs.length}</span></h2>
+        <div class="dash-list">${jobRows}</div>
+      </div>
+      <div class="dash-section span-2">
+        <h2><span class="dot" style="background:var(--node-entity);color:var(--node-entity)"></span>Database Tables <span class="count-pill">${tables.length}</span></h2>
+        <div class="dash-list">${tableRows}</div>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll("#dash-content .dash-row[data-id]").forEach(row =>
+    row.addEventListener("click", () => { switchTab("explorer"); selectNode(row.dataset.id); }));
+  document.querySelectorAll("#dash-content .layer-cell").forEach(cell =>
+    cell.addEventListener("click", () => {
+      switchTab("explorer");
+      if (cell.dataset.stereo) applyExplorerStereotypeFilter(cell.dataset.stereo);
+      else if (cell.dataset.type) applyExplorerTypeFilter(cell.dataset.type);
+    }));
+  document.getElementById("copy-ai-context-btn").addEventListener("click", e =>
+    copyToClipboard(buildSystemMarkdownContext(), e.currentTarget));
+}
+
+/** Condensed whole-system Markdown brief — architecture, endpoints, external dependencies, and
+ *  flagged issues in one paste-able block. This is the practical, low-effort stepping stone
+ *  toward a full MCP server (the dominant 2026 pattern for feeding AI coding agents codebase
+ *  context): today you paste this into a chat; tomorrow an MCP server could serve the same
+ *  facts as callable tools. */
+function buildSystemMarkdownContext() {
+  const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
+  const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
+  const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
+  const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+
+  const lines = [
+    `# ${serviceName || "Service"} — architecture summary`,
+    ``,
+    `Generated by Cartograph via static analysis (no AI, no guessing — every fact traceable to a file/line).`,
+    ``,
+    `## Overview`,
+    `- ${controllers.length} controllers, ${services.length} services, ${endpoints.length} REST endpoints`,
+    `- ${externals.length} external dependencies, ${topics.length} messaging topics/queues, ${tables.length} database tables`,
+    ``,
+    `## Endpoints`,
+    ...endpoints.slice(0, 60).map(ep => `- \`${ep.attributes.httpMethod} ${ep.attributes.path}\` → ${(ep.attributes.handlerClass || "").split(".").pop()}.${ep.attributes.handlerMethod}()${ep.attributes.requestBodyType ? ` — body: ${ep.attributes.requestBodyType}` : ""}${ep.attributes.returnType && ep.attributes.returnType !== "void" ? ` → ${ep.attributes.returnType}` : ""}`),
+    endpoints.length > 60 ? `- …and ${endpoints.length - 60} more` : "",
+    ``,
+    `## External dependencies`,
+    ...externals.map(e => `- ${e.name}${e.attributes.via ? ` (via ${e.attributes.via})` : ""}`),
+    ``,
+    `## Architecture issues found`,
+    ...(() => {
+      const cycles = findCircularDependencies();
+      const violations = findLayeringViolations();
+      const leaks = findLeakyEntities();
+      const issueLines = [];
+      cycles.forEach(c => issueLines.push(`- Circular dependency: ${c.map(id => (nodesById.get(id) || {}).name || id).join(" → ")}`));
+      violations.forEach(v => issueLines.push(`- Layering violation: ${v.source.name} injects ${v.target.name} directly, skipping the service layer`));
+      leaks.forEach(l => issueLines.push(`- Entity leak: \`${l.endpoint.attributes.httpMethod} ${l.endpoint.attributes.path}\` returns entity ${l.entity.name} directly`));
+      return issueLines.length ? issueLines : ["- None detected"];
+    })()
+  ];
+  return lines.filter(l => l !== "").join("\n");
+}
+
+function renderGraphStats() {
+  const counts = [
+    ["--node-controller", "controllers", GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller").length],
+    ["--node-service", "services", GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service").length],
+    ["--node-repository", "repos/clients", GRAPH_DATA.nodes.filter(n => ["repository","feignClient"].includes(stereotypeOf(n))).length],
+    ["--accent", "endpoints", typeCounts.get("ENDPOINT") || 0],
+    ["--node-external", "external", (typeCounts.get("EXTERNAL_SERVICE") || 0) + (typeCounts.get("DATABASE") || 0)],
+    ["--node-topic", "topics", (typeCounts.get("KAFKA_TOPIC") || 0) + (typeCounts.get("QUEUE") || 0)],
+  ];
+  document.getElementById("popover-stats").innerHTML =
+    counts.map(([c, l, n]) =>
+      `<div class="row"><span><span class="swatch" style="background:var(${c});color:var(${c})"></span>${l}</span><span class="val">${n}</span></div>`).join("") +
+    `<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><span>total nodes</span><span class="val">${GRAPH_DATA.nodes.length.toLocaleString()}</span></div>`;
+}
+
+/* ============================== API reference (swagger-like) ============================== */
+const apiState = { rendered: false };
+
+function renderApiReference() {
+  apiState.rendered = true;
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const byController = new Map();
+  for (const ep of endpoints) {
+    const cls = ep.attributes.handlerClass || "Unknown";
+    if (!byController.has(cls)) byController.set(cls, []);
+    byController.get(cls).push(ep);
+  }
+  const verbOrder = { GET: 0, POST: 1, PUT: 2, PATCH: 3, DELETE: 4 };
+  const groups = [...byController.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const groupsHtml = groups.map(([cls, eps]) => {
+    const simpleName = cls.split(".").pop();
+    const sorted = [...eps].sort((a, b) => {
+      const va = verbOrder[a.attributes.httpMethod] ?? 9, vb = verbOrder[b.attributes.httpMethod] ?? 9;
+      return va - vb || a.attributes.path.localeCompare(b.attributes.path);
+    });
+    const rows = sorted.map(apiEndpointCardHtml).join("");
+    return `<div class="api-group">
+      <div class="api-group-title">${escapeHtml(simpleName)} <span class="count">${eps.length} endpoint${eps.length === 1 ? "" : "s"}</span></div>
+      ${rows}
+    </div>`;
+  }).join("");
+
+  document.getElementById("api-content").innerHTML = `
+    <div class="hero">
+      <div>
+        <h1>API Reference</h1>
+        <div class="sub">Every REST endpoint detected in this service, with request/response shapes inferred from the actual DTO classes — click a route to expand it.</div>
+      </div>
+      <button class="curl-btn" id="download-openapi-btn" style="white-space:nowrap">${ICON_DOWNLOAD} Download OpenAPI spec</button>
+    </div>
+    <input type="text" class="api-search" id="api-search-input" placeholder="Filter by path, method, or controller…" autocomplete="off" />
+    <div id="api-groups">${groupsHtml || '<div class="dash-empty">No REST endpoints detected.</div>'}</div>
+  `;
+  wireApiHandlers();
+  document.getElementById("download-openapi-btn").addEventListener("click", downloadOpenApiSpec);
+}
+
+function apiEndpointCardHtml(ep) {
+  const secured = !!ep.attributes.securityRule;
+  const securityBadge = `<span class="security-badge ${secured ? "secured" : "unsecured"}" title="${secured ? escapeHtml(ep.attributes.securityRule) : "No @PreAuthorize/@Secured/@RolesAllowed detected"}">${secured ? ICON_LOCK : ICON_UNLOCK}</span>`;
+  return `<div class="api-endpoint" data-id="${escapeHtml(ep.id)}">
+    <div class="api-endpoint-head">
+      <span class="verb verb-${ep.attributes.httpMethod}">${ep.attributes.httpMethod}</span>
+      <span class="path">${escapeHtml(ep.attributes.path)}</span>
+      ${securityBadge}
+      <span class="chev">${ICON_CHEVRON}</span>
+    </div>
+    <div class="api-endpoint-body"></div>
+  </div>`;
+}
+
+const TRACE_EDGE_TYPES = new Set(["INJECTS", "DEPENDS_ON", "MAPS_TO", "PUBLISHES_TO"]);
+
+/** Walks outward from an endpoint's controller via INJECTS/DEPENDS_ON/MAPS_TO/PUBLISHES_TO
+ *  edges (bounded to 4 hops, capped at 12 steps) to approximate the request's call chain — the
+ *  "sequence diagram" view research consistently names as the #1 thing developers want for
+ *  understanding request flow, built here from the same edges the graph already has. */
+function buildRequestTrace(endpointNode) {
+  const a = endpointNode.attributes || {};
+  const steps = [{ id: endpointNode.id, label: `${a.httpMethod} ${a.path}`, sub: "HTTP request received", colorVar: "--accent" }];
+
+  const controllerNode = a.handlerClass ? nodesById.get("CLASS:" + a.handlerClass) : null;
+  if (!controllerNode) return steps;
+  steps.push({ id: controllerNode.id, label: controllerNode.name + "." + (a.handlerMethod || "") + "()", sub: "handles the request", colorVar: colorVarFor(controllerNode) });
+
+  const visited = new Set([controllerNode.id]);
+  let frontier = [controllerNode.id];
+  for (let depth = 0; depth < 4 && frontier.length && steps.length < 12; depth++) {
+    const next = [];
+    for (const id of frontier) {
+      for (const e of (outgoing.get(id) || [])) {
+        if (!TRACE_EDGE_TYPES.has(e.type) || visited.has(e.target)) continue;
+        const n = nodesById.get(e.target);
+        if (!n) continue;
+        visited.add(e.target);
+        steps.push({ id: n.id, label: n.name, sub: traceSubLabel(e.type, n), colorVar: colorVarFor(n) });
+        next.push(e.target);
+        if (steps.length >= 12) break;
+      }
+      if (steps.length >= 12) break;
+    }
+    frontier = next;
+  }
+  return steps;
+}
+
+function traceSubLabel(edgeType, targetNode) {
+  switch (edgeType) {
+    case "INJECTS": return "calls into";
+    case "DEPENDS_ON": return "depends on";
+    case "MAPS_TO": return "persists to table " + targetNode.name;
+    case "PUBLISHES_TO": return "publishes an event to";
+    default: return "";
+  }
+}
+
+function requestTraceHtml(endpointNode) {
+  const steps = buildRequestTrace(endpointNode);
+  if (steps.length <= 1) return "";
+  const stepsHtml = steps.map(s => `
+    <div class="trace-step">
+      <div class="trace-marker" style="background:var(${s.colorVar})"></div>
+      <div class="trace-content" data-id="${escapeHtml(s.id)}">
+        <div class="trace-label">${escapeHtml(s.label)}</div>
+        <div class="trace-sub">${escapeHtml(s.sub)}</div>
+      </div>
+    </div>`).join("");
+  return `<div class="detail-section-label">Request flow</div><div class="trace">${stepsHtml}</div>`;
+}
+
+function buildApiEndpointBody(id) {
+  const node = nodesById.get(id);
+  const methodNode = handlerMethodNode(node);
+  const desc = methodNode && methodNode.attributes && methodNode.attributes.javadoc
+    ? `<div class="api-endpoint-desc">${escapeHtml(methodNode.attributes.javadoc)}</div>` : "";
+  const trace = requestTraceHtml(node);
+  const api = apiSchemaHtml(node);
+  const securityLine = `<div class="api-endpoint-meta" style="margin-top:0">
+    <span class="security-badge ${node.attributes.securityRule ? "secured" : "unsecured"}">${node.attributes.securityRule ? ICON_LOCK : ICON_UNLOCK}</span>
+    <span>${node.attributes.securityRule ? escapeHtml(node.attributes.securityRule) : "No security annotation detected — may be enforced elsewhere"}</span>
+  </div>`;
+  const meta = `<div class="api-endpoint-meta">
+    <span>${escapeHtml(node.attributes.handlerClass || "")}.${escapeHtml(node.attributes.handlerMethod || "")}()</span>
+    ${node.provenance ? `<span>${escapeHtml(node.provenance.file)}:${node.provenance.line}</span>` : ""}
+  </div>`;
+  const actions = `<div class="detail-actions" style="margin-top:12px">
+    <button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>
+  </div>`;
+  return desc + securityLine + trace + api + meta + actions;
+}
+
+function wireApiHandlers() {
+  document.querySelectorAll(".api-endpoint-head").forEach(head => {
+    head.addEventListener("click", () => {
+      const card = head.closest(".api-endpoint");
+      const wasOpen = card.classList.contains("open");
+      card.classList.toggle("open");
+      if (!wasOpen && !card.dataset.built) {
+        const body = card.querySelector(".api-endpoint-body");
+        body.innerHTML = buildApiEndpointBody(card.dataset.id);
+        wireDetailHandlers(body);
+        card.dataset.built = "1";
+      }
+    });
+  });
+  document.getElementById("api-search-input").addEventListener("input", e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll(".api-endpoint").forEach(card => {
+      const ep = nodesById.get(card.dataset.id);
+      const hay = (ep.attributes.httpMethod + " " + ep.attributes.path + " " + (ep.attributes.handlerClass || "")).toLowerCase();
+      card.style.display = !q || hay.includes(q) ? "" : "none";
+    });
+    document.querySelectorAll(".api-group").forEach(g => {
+      const anyVisible = [...g.querySelectorAll(".api-endpoint")].some(c => c.style.display !== "none");
+      g.style.display = anyVisible ? "" : "none";
+    });
+  });
+}
+
+/* ============================== explorer ============================== */
+const explorerState = { typeFilter: null, stereotypeFilter: null, query: "", selectedId: null };
+
+function applyExplorerTypeFilter(type) {
+  explorerState.typeFilter = type || null;
+  explorerState.stereotypeFilter = null;
+  renderTypeNav(); renderNodeList();
+}
+function applyExplorerStereotypeFilter(stereo) {
+  explorerState.typeFilter = null;
+  explorerState.stereotypeFilter = stereo || null;
+  renderTypeNav(); renderNodeList();
+}
+
+function renderTypeNav() {
+  const nav = document.getElementById("type-nav");
+  const types = [...typeCounts.entries()].sort((a, b) => b[1] - a[1]);
+  let html = `<div class="type-group-label">All</div>`;
+  html += `<div class="type-row ${explorerState.typeFilter === null && explorerState.stereotypeFilter === null ? 'active' : ''}" data-type="">
+      <span>everything</span><span class="count">${GRAPH_DATA.nodes.length}</span></div>`;
+  html += `<div class="type-group-label">By type</div>`;
+  for (const [type, count] of types) {
+    html += `<div class="type-row ${explorerState.typeFilter === type ? 'active' : ''}" data-type="${type}">
+        <span>${type.toLowerCase().replace(/_/g, " ")}</span><span class="count">${count}</span></div>`;
+  }
+  nav.innerHTML = html;
+  nav.querySelectorAll(".type-row").forEach(row =>
+    row.addEventListener("click", () => applyExplorerTypeFilter(row.dataset.type)));
+}
+
+function renderNodeList() {
+  const list = document.getElementById("node-list");
+  const filtered = GRAPH_DATA.nodes.filter(n =>
+    (explorerState.typeFilter === null || n.type === explorerState.typeFilter) &&
+    (explorerState.stereotypeFilter === null || stereotypeOf(n) === explorerState.stereotypeFilter)
+  ).slice(0, 500);
+
+  if (filtered.length === 0) { list.innerHTML = `<div class="empty-state">No nodes match.</div>`; return; }
+  list.innerHTML = filtered.map(n => {
+    const extra = n.attributes?.path ? n.attributes.path : n.attributes?.value ? n.attributes.value : (n.provenance?.file || "");
+    return `<div class="node-row ${n.id === explorerState.selectedId ? 'selected' : ''}" data-id="${escapeHtml(n.id)}">
+      <span class="badge">${n.type.toLowerCase().replace(/_/g, " ")}</span>
+      <span class="name">${escapeHtml(n.name)}</span>
+      <span class="meta">${escapeHtml(String(extra)).slice(0, 40)}</span>
+    </div>`;
+  }).join("");
+  list.querySelectorAll(".node-row").forEach(row => row.addEventListener("click", () => selectNode(row.dataset.id)));
+}
+
+function selectNode(id) {
+  explorerState.selectedId = id;
+  recordRecentlyViewed(id);
+  renderNodeList();
+  document.getElementById("detail-panel").innerHTML = buildDetailHtml(id, { showGraphJump: true });
+  wireDetailHandlers(document.getElementById("detail-panel"));
+  const row = document.querySelector(`.node-row.selected`);
+  if (row) row.scrollIntoView({ block: "nearest" });
+}
+
+/* ============================== API schema (request/response, swagger-like) ============================== */
+const JDK_SIMPLE_TYPES = new Set([
+  "void", "String", "Integer", "Long", "Double", "Float", "Boolean", "Character", "Byte", "Short",
+  "Object", "int", "long", "double", "float", "boolean", "char", "byte", "short", "BigDecimal", "BigInteger",
+  "LocalDate", "LocalDateTime", "LocalTime", "Instant", "Date", "UUID", "Map"
+]);
+const COLLECTION_WRAPPER = /^(List|Set|Collection|Page|Iterable)<(.+)>$/;
+const SINGLE_WRAPPER = /^(ResponseEntity|Optional|CompletableFuture|Mono|Flux)<(.+)>$/;
+
+/** Peels off common Spring/reactive wrapper generics (ResponseEntity<T>, List<T>, Optional<T>, ...) to find the DTO type actually being carried. */
+function unwrapType(typeStr) {
+  if (!typeStr) return null;
+  const t = typeStr.trim();
+  const collectionMatch = t.match(COLLECTION_WRAPPER);
+  if (collectionMatch) return unwrapType(collectionMatch[2]);
+  const singleMatch = t.match(SINGLE_WRAPPER);
+  if (singleMatch) return unwrapType(singleMatch[2]);
+  return t;
+}
+function isCollectionType(typeStr) {
+  return COLLECTION_WRAPPER.test((typeStr || "").trim()) || /^(ResponseEntity|Optional|CompletableFuture|Mono|Flux)<(List|Set|Collection|Page|Iterable)</.test((typeStr || "").trim());
+}
+function findClassNodeBySimpleName(simpleName) {
+  if (!simpleName || simpleName.includes("<") || simpleName.includes(",")) return null;
+  return GRAPH_DATA.nodes.find(n => (n.type === "CLASS" || n.type === "INTERFACE" || n.type === "ENUM") && n.name === simpleName) || null;
+}
+function fieldsOfClass(classNode) {
+  if (!classNode) return [];
+  return (outgoing.get(classNode.id) || [])
+    .filter(e => e.type === "CONTAINS")
+    .map(e => nodesById.get(e.target))
+    .filter(n => n && n.type === "FIELD")
+    .map(n => ({ name: n.name, type: (n.attributes && n.attributes.declaredType) || "?" }));
+}
+
+/** Placeholder example values per JDK/primitive type, used to build a realistic-looking JSON body. */
+const EXAMPLE_VALUES = {
+  String: "string", int: 0, Integer: 0, short: 0, Short: 0, byte: 0, Byte: 0,
+  long: 0, Long: 0, double: 0.0, Double: 0.0, float: 0.0, Float: 0.0,
+  BigDecimal: 0.0, BigInteger: 0, boolean: true, Boolean: true, char: "c", Character: "c",
+  UUID: "00000000-0000-0000-0000-000000000000",
+  LocalDate: "2024-01-01", LocalDateTime: "2024-01-01T00:00:00", Instant: "2024-01-01T00:00:00Z",
+  LocalTime: "00:00:00", Date: "2024-01-01T00:00:00Z", Object: {}
+};
+
+/** Recursively builds a plausible example JSON value for a Java type string, resolving DTO
+ *  fields from the graph the same way the field list does. Cycle- and depth-guarded so a
+ *  self-referential or deeply nested model can't hang the renderer. */
+function exampleValueForType(typeStr, depth = 0, seen = null) {
+  if (!typeStr) return null;
+  const t = typeStr.trim();
+  const collectionMatch = t.match(COLLECTION_WRAPPER);
+  if (collectionMatch) return [exampleValueForType(collectionMatch[2], depth, seen)];
+  const singleMatch = t.match(SINGLE_WRAPPER);
+  if (singleMatch) return exampleValueForType(singleMatch[2], depth, seen);
+  const mapMatch = t.match(/^Map<\s*[^,]+,\s*(.+)>$/);
+  if (mapMatch) return { additionalProp: exampleValueForType(mapMatch[1], depth, seen) };
+  if (t === "void") return null;
+  if (Object.prototype.hasOwnProperty.call(EXAMPLE_VALUES, t)) return EXAMPLE_VALUES[t];
+
+  if (depth > 4) return "…";
+  const classNode = findClassNodeBySimpleName(t);
+  if (!classNode) return null;
+  if (seen && seen.has(classNode.id)) return "…";
+  if (classNode.type === "ENUM") return t.replace(/([a-z])([A-Z])/g, "$1_$2").toUpperCase();
+
+  const fields = fieldsOfClass(classNode);
+  if (fields.length === 0) return {};
+  const nextSeen = new Set(seen || []); nextSeen.add(classNode.id);
+  const obj = {};
+  for (const f of fields) obj[f.name] = exampleValueForType(f.type, depth + 1, nextSeen);
+  return obj;
+}
+
+/** Minimal client-side JSON syntax highlighter — no dependency needed for something this small. */
+function syntaxHighlightJson(value) {
+  const json = JSON.stringify(value, null, 2) ?? "null";
+  const escaped = escapeHtml(json);
+  return escaped.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, m => {
+    let cls = "json-num";
+    if (/^"/.test(m)) cls = /:$/.test(m) ? "json-key" : "json-str";
+    else if (/true|false/.test(m)) cls = "json-bool";
+    else if (/null/.test(m)) cls = "json-null";
+    return `<span class="${cls}">${m}</span>`;
+  });
+}
+
+/** Renders a request/response "card": a syntax-highlighted JSON example up front (the fast way
+ *  to understand the shape), with the flat field/type list tucked into a native <details> for
+ *  when the raw types matter — the same information Swagger splits across "Example"/"Model". */
+function schemaHtml(typeStr, label) {
+  if (!typeStr || typeStr === "void") return "";
+  const core = unwrapType(typeStr);
+  if (!core) return "";
+  const isKnownDto = !JDK_SIMPLE_TYPES.has(core) && findClassNodeBySimpleName(core);
+  if (!isKnownDto) return "";
+  const classNode = findClassNodeBySimpleName(core);
+  const fields = fieldsOfClass(classNode);
+  const suffix = isCollectionType(typeStr) ? "[ ]" : "";
+  const example = exampleValueForType(typeStr);
+  const fieldRows = fields.length
+    ? fields.map(f => `<div class="schema-row"><span class="fname">${escapeHtml(f.name)}</span><span class="ftype">${escapeHtml(f.type)}</span></div>`).join("")
+    : `<div class="schema-row schema-empty">no fields found</div>`;
+  const exampleId = "ex-" + Math.random().toString(36).slice(2, 9);
+  return `<div class="schema-block">
+    <div class="schema-head">
+      <span class="schema-label">${escapeHtml(label)}</span>
+      <span class="schema-type" data-id="${escapeHtml(classNode.id)}">${escapeHtml(core)}${suffix}</span>
+      <button class="schema-copy" data-action="copy-json" data-json-id="${exampleId}" title="Copy JSON">${ICON_COPY}</button>
+    </div>
+    <pre class="json-block" id="${exampleId}" data-raw="${escapeHtml(JSON.stringify(example, null, 2) ?? "null")}">${syntaxHighlightJson(example)}</pre>
+    <details class="schema-fields"><summary>Fields (${fields.length})</summary><div class="schema-body">${fieldRows}</div></details>
+  </div>`;
+}
+
+/** Builds a ready-to-run cURL command for an endpoint, substituting example values for path/query params and a generated JSON body. */
+function buildCurlCommand(node) {
+  const a = node.attributes || {};
+  let path = a.path || "/";
+  for (const p of (a.pathParams || [])) {
+    const [type, name] = p.split(" ");
+    path = path.replace("{" + name + "}", encodeURIComponent(String(exampleValueForType(type))));
+  }
+  const query = (a.queryParams || []).map(p => {
+    const [type, name] = p.split(" ");
+    return name + "=" + encodeURIComponent(String(exampleValueForType(type)));
+  }).join("&");
+  let cmd = `curl -X ${a.httpMethod} "http://localhost:8080${path}${query ? "?" + query : ""}"`;
+  if (a.requestBodyType) {
+    const body = exampleValueForType(a.requestBodyType);
+    cmd += ` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(body)}'`;
+  }
+  return cmd;
+}
+
+const OPENAPI_PRIMITIVES = {
+  String: { type: "string" }, UUID: { type: "string", format: "uuid" },
+  LocalDate: { type: "string", format: "date" }, LocalDateTime: { type: "string", format: "date-time" },
+  Instant: { type: "string", format: "date-time" }, Date: { type: "string", format: "date-time" }, LocalTime: { type: "string" },
+  int: { type: "integer", format: "int32" }, Integer: { type: "integer", format: "int32" },
+  long: { type: "integer", format: "int64" }, Long: { type: "integer", format: "int64" },
+  short: { type: "integer" }, Short: { type: "integer" }, byte: { type: "integer" }, Byte: { type: "integer" },
+  double: { type: "number", format: "double" }, Double: { type: "number", format: "double" },
+  float: { type: "number", format: "float" }, Float: { type: "number", format: "float" },
+  BigDecimal: { type: "number" }, BigInteger: { type: "integer" },
+  boolean: { type: "boolean" }, Boolean: { type: "boolean" },
+  char: { type: "string" }, Character: { type: "string" }, Object: { type: "object" }
+};
+
+/** Converts a Java type string into an OpenAPI 3.0 schema object, resolving DTO fields
+ *  recursively the same way the JSON example generator does (cycle-guarded). */
+function typeToOpenApiSchema(typeStr, visited = null) {
+  if (!typeStr || typeStr === "void") return { type: "object", nullable: true };
+  const t = typeStr.trim();
+  const collectionMatch = t.match(COLLECTION_WRAPPER);
+  if (collectionMatch) return { type: "array", items: typeToOpenApiSchema(collectionMatch[2], visited) };
+  const singleMatch = t.match(SINGLE_WRAPPER);
+  if (singleMatch) return typeToOpenApiSchema(singleMatch[2], visited);
+  if (OPENAPI_PRIMITIVES[t]) return OPENAPI_PRIMITIVES[t];
+
+  const classNode = findClassNodeBySimpleName(t);
+  if (!classNode) return { type: "object" };
+  if (visited && visited.has(classNode.id)) return { type: "object", description: "circular reference to " + t };
+  if (classNode.type === "ENUM") return { type: "string" };
+
+  const fields = fieldsOfClass(classNode);
+  const nextVisited = new Set(visited || []); nextVisited.add(classNode.id);
+  const properties = {};
+  for (const f of fields) properties[f.name] = typeToOpenApiSchema(f.type, nextVisited);
+  return { type: "object", properties };
+}
+
+/** Builds a minimal but valid OpenAPI 3.0 document from every detected endpoint — importable
+ *  directly into Postman/Insomnia, or as a first draft for a hand-maintained spec. */
+function buildOpenApiSpec() {
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const paths = {};
+  for (const ep of endpoints) {
+    const a = ep.attributes;
+    const path = a.path || "/";
+    if (!paths[path]) paths[path] = {};
+
+    const parameters = [];
+    for (const p of (a.pathParams || [])) {
+      const [type, name] = p.split(" ");
+      parameters.push({ name, in: "path", required: true, schema: typeToOpenApiSchema(type) });
+    }
+    for (const p of (a.queryParams || [])) {
+      const [type, name] = p.split(" ");
+      parameters.push({ name, in: "query", required: false, schema: typeToOpenApiSchema(type) });
+    }
+
+    const methodNode = handlerMethodNode(ep);
+    const controllerSimpleName = (a.handlerClass || "default").split(".").pop();
+    const operation = {
+      summary: (methodNode && methodNode.attributes && methodNode.attributes.javadoc) || a.handlerMethod,
+      operationId: controllerSimpleName + "_" + a.handlerMethod,
+      tags: [controllerSimpleName],
+      parameters,
+      responses: {
+        "200": {
+          description: "OK",
+          content: (a.returnType && a.returnType !== "void")
+            ? { "application/json": { schema: typeToOpenApiSchema(a.returnType) } }
+            : undefined
+        }
+      }
+    };
+    if (a.requestBodyType) {
+      operation.requestBody = { required: true, content: { "application/json": { schema: typeToOpenApiSchema(a.requestBodyType) } } };
+    }
+    paths[path][a.httpMethod.toLowerCase()] = operation;
+  }
+
+  return {
+    openapi: "3.0.3",
+    info: {
+      title: (serviceName || "Service") + " API",
+      version: "1.0.0",
+      description: "Generated by Cartograph from static analysis — verify before relying on it as a source of truth."
+    },
+    paths
+  };
+}
+
+function downloadOpenApiSpec() {
+  const spec = buildOpenApiSpec();
+  const blob = new Blob([JSON.stringify(spec, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = (serviceName || "service").toLowerCase().replace(/[^a-z0-9-]+/g, "-") + "-openapi.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Finds the handler method node behind an endpoint via its EXPOSES edge, so we can pull the
+ *  method's javadoc (already extracted) as a human description in the API reference. */
+function handlerMethodNode(endpointNode) {
+  const exposesEdge = (incoming.get(endpointNode.id) || []).find(e => e.type === "EXPOSES");
+  return exposesEdge ? nodesById.get(exposesEdge.source) : null;
+}
+
+function apiSchemaHtml(node) {
+  if (node.type !== "ENDPOINT") return "";
+  const a = node.attributes || {};
+  const pathParams = (a.pathParams || []).map(p => `<div class="schema-row"><span class="fname">${escapeHtml(p.split(" ")[1] || p)}</span><span class="ftype">${escapeHtml(p.split(" ")[0] || "")}</span></div>`).join("");
+  const queryParams = (a.queryParams || []).map(p => `<div class="schema-row"><span class="fname">${escapeHtml(p.split(" ")[1] || p)}</span><span class="ftype">${escapeHtml(p.split(" ")[0] || "")}</span></div>`).join("");
+  const requestSchema = schemaHtml(a.requestBodyType, "Request body");
+  const responseSchema = schemaHtml(a.returnType, "Response");
+
+  const pathBlock = pathParams ? `<div class="schema-block"><div class="schema-head"><span class="schema-label">Path params</span></div><div class="schema-body">${pathParams}</div></div>` : "";
+  const queryBlock = queryParams ? `<div class="schema-block"><div class="schema-head"><span class="schema-label">Query params</span></div><div class="schema-body">${queryParams}</div></div>` : "";
+
+  const body = pathBlock + queryBlock + requestSchema + responseSchema;
+  if (!body) return "";
+  return `<div class="detail-section-label">API</div>
+    <div class="api-schema">${body}</div>
+    <button class="curl-btn" data-action="copy-curl" data-id="${escapeHtml(node.id)}">${ICON_TERMINAL} Copy as cURL</button>`;
+}
+
+function buildDetailHtml(id, opts = {}) {
+  const node = nodesById.get(id);
+  if (!node) return `<div class="placeholder">Node not found.</div>`;
+
+  const hiddenAttrKeys = new Set(["lastModifiedBy", "lastModifiedDate"]);
+  if (node.type === "ENDPOINT") ["parameters", "requestBodyType", "pathParams", "queryParams", "securityRule"].forEach(k => hiddenAttrKeys.add(k));
+  const attrs = Object.entries(node.attributes || {})
+    .filter(([k, v]) => !hiddenAttrKeys.has(k) && v !== null && v !== undefined && String(v).length > 0)
+    .map(([k, v]) => `<div class="attr-row"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(Array.isArray(v) ? v.join(", ") : v)}</span></div>`)
+    .join("");
+
+  const editorUri = vscodeUri(node.provenance);
+  const pathLabel = node.provenance ? node.provenance.file + (node.provenance.line >= 0 ? ":" + node.provenance.line : "") : "";
+  const blameAuthor = node.attributes && node.attributes.lastModifiedBy;
+  const blameDate = node.attributes && node.attributes.lastModifiedDate;
+  const blameLine = blameAuthor
+    ? `<div class="blame-line">${ICON_CLOCK} Last changed by <b>${escapeHtml(blameAuthor)}</b>${blameDate ? " on " + escapeHtml(blameDate) : ""}</div>`
+    : "";
+  const prov = node.provenance
+    ? `<div class="prov-link">
+        <span class="file">${escapeHtml(node.provenance.file)}</span>${node.provenance.line >= 0 ? ':' + node.provenance.line : ''} <span style="color:var(--text-faint)">via ${escapeHtml(node.provenance.extractor)}</span>
+        ${blameLine}
+        <div class="prov-actions">
+          ${editorUri ? `<a href="${escapeHtml(editorUri)}">${ICON_EDITOR} Open in editor</a>` : ""}
+          <button data-action="copy-path" data-value="${escapeHtml(pathLabel)}">${ICON_COPY} Copy path</button>
+        </div>
+      </div>`
+    : "";
+
+  const out = (outgoing.get(id) || []);
+  const inc = (incoming.get(id) || []);
+  const outHtml = out.map(e => edgeRowHtml(e, "target", "→")).join("");
+  const incHtml = inc.map(e => edgeRowHtml(e, "source", "←")).join("");
+
+  const jumpAction = opts.showGraphJump
+    ? `<button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>`
+    : `<button data-action="open-in-explorer" data-id="${escapeHtml(id)}">${ICON_EXTERNAL} Open in explorer</button>`;
+  const isPinned = pinnedIds.has(id);
+  const pinAction = `<button data-action="toggle-pin" data-id="${escapeHtml(id)}" title="${isPinned ? "Unpin" : "Pin for quick access via Ctrl K"}">${isPinned ? ICON_STAR_FILLED : ICON_STAR}</button>`;
+
+  return `
+    <div class="detail-type">${node.type.toLowerCase().replace(/_/g, " ")}${stereotypeOf(node) ? " · " + stereotypeOf(node) : ""}</div>
+    <div class="detail-name">${escapeHtml(node.name)}</div>
+    <div class="detail-actions">
+      ${jumpAction}
+      <button data-action="copy-markdown" data-id="${escapeHtml(id)}">${ICON_MARKDOWN} Copy context</button>
+      <button data-action="copy-link" data-id="${escapeHtml(id)}">${ICON_LINK} Copy link</button>
+      ${pinAction}
+    </div>
+    ${prov}
+    ${apiSchemaHtml(node)}
+    ${attrs ? `<div class="detail-section-label">Attributes</div>${attrs}` : ""}
+    ${out.length ? `<div class="detail-section-label">Outgoing (${out.length})</div><div class="edge-list">${outHtml}</div>` : ""}
+    ${inc.length ? `<div class="detail-section-label">Incoming (${inc.length})</div><div class="edge-list">${incHtml}</div>` : ""}
+  `;
+}
+
+function edgeRowHtml(edge, endKey, arrow) {
+  const otherId = edge[endKey];
+  const other = nodesById.get(otherId);
+  const label = other ? other.name : otherId;
+  return `<div class="edge-item" data-id="${escapeHtml(otherId)}">
+    <span class="dir">${arrow}</span><span class="etype">${edge.type.toLowerCase().replace(/_/g, " ")}</span><span class="target">${escapeHtml(label)}</span>
+  </div>`;
+}
+
+function wireDetailHandlers(container) {
+  container.querySelectorAll(".edge-item").forEach(item =>
+    item.addEventListener("click", () => {
+      if (container.id === "drawer-content") openDrawer(item.dataset.id);
+      else selectNode(item.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='show-in-graph']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      switchTab("graph");
+      focusGraphNode(btn.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='open-in-explorer']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      closeDrawer();
+      switchTab("explorer");
+      selectNode(btn.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='copy-path']").forEach(btn =>
+    btn.addEventListener("click", () => copyToClipboard(btn.dataset.value, btn)));
+  container.querySelectorAll("[data-action='copy-markdown']").forEach(btn =>
+    btn.addEventListener("click", () => copyToClipboard(buildMarkdownContext(btn.dataset.id), btn)));
+  container.querySelectorAll("[data-action='copy-link']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const url = location.href.split("#")[0] + "#n=" + encodeURIComponent(btn.dataset.id);
+      copyToClipboard(url, btn);
+    }));
+  container.querySelectorAll("[data-action='toggle-pin']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      togglePin(btn.dataset.id);
+      if (container.id === "drawer-content") openDrawer(btn.dataset.id, { fromHistory: true });
+      else selectNode(btn.dataset.id);
+    }));
+  container.querySelectorAll(".schema-type[data-id]").forEach(el =>
+    el.addEventListener("click", () => {
+      if (container.id === "drawer-content") openDrawer(el.dataset.id);
+      else selectNode(el.dataset.id);
+    }));
+  container.querySelectorAll(".trace-content[data-id]").forEach(el =>
+    el.addEventListener("click", () => {
+      if (container.id === "drawer-content") openDrawer(el.dataset.id);
+      else selectNode(el.dataset.id);
+    }));
+  container.querySelectorAll("[data-action='copy-json']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const pre = document.getElementById(btn.dataset.jsonId);
+      if (pre) copyToClipboard(pre.dataset.raw, btn);
+    }));
+  container.querySelectorAll("[data-action='copy-curl']").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const node = nodesById.get(btn.dataset.id);
+      if (node) copyToClipboard(buildCurlCommand(node), btn);
+    }));
+}
+
+/* ============================== command palette ============================== */
+/** Pinned nodes and recently-viewed history, persisted to localStorage so they survive a
+ *  refresh — the everyday-workflow win of not having to re-search the same handful of classes
+ *  every time you come back to a task. */
+function loadIdSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch (e) { return new Set(); }
+}
+function loadIdList(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch (e) { return []; }
+}
+const pinnedIds = loadIdSet("cartograph-pins");
+let recentIds = loadIdList("cartograph-recent");
+
+function savePinnedIds() {
+  try { localStorage.setItem("cartograph-pins", JSON.stringify([...pinnedIds])); } catch (e) {}
+}
+function recordRecentlyViewed(id) {
+  if (!nodesById.has(id)) return;
+  recentIds = [id, ...recentIds.filter(x => x !== id)].slice(0, 8);
+  try { localStorage.setItem("cartograph-recent", JSON.stringify(recentIds)); } catch (e) {}
+}
+function togglePin(id) {
+  if (pinnedIds.has(id)) pinnedIds.delete(id); else pinnedIds.add(id);
+  savePinnedIds();
+}
+
+const paletteState = { open: false, items: [], active: 0 };
+
+function openPalette() {
+  paletteState.open = true;
+  document.getElementById("palette-overlay").classList.add("open");
+  const input = document.getElementById("palette-input");
+  input.value = "";
+  runPaletteSearch("");
+  requestAnimationFrame(() => input.focus());
+}
+function closePalette() {
+  paletteState.open = false;
+  document.getElementById("palette-overlay").classList.remove("open");
+}
+
+function runPaletteSearch(q) {
+  const query = q.trim().toLowerCase();
+
+  if (!query) {
+    // empty query: surface what you actually revisit — pinned first, then recently viewed —
+    // instead of an arbitrary default list, so Ctrl K doubles as a "jump back to my stuff" key
+    const pinned = [...pinnedIds].map(id => nodesById.get(id)).filter(Boolean);
+    const recent = recentIds.map(id => nodesById.get(id)).filter(n => n && !pinnedIds.has(n.id));
+    const combined = [...pinned, ...recent];
+    if (combined.length) {
+      paletteState.items = combined.slice(0, 12);
+      paletteState.active = 0;
+      renderPaletteResults();
+      return;
+    }
+  }
+
+  const scored = [];
+  for (const n of GRAPH_DATA.nodes) {
+    if (n.type === "FIELD" || n.type === "METHOD") continue;
+    const name = n.name.toLowerCase();
+    const path = String(n.attributes?.path || "").toLowerCase();
+    let score = -1;
+    if (!query) score = (n.type === "ENDPOINT" ? 3 : n.type === "CLASS" ? 2 : 1);
+    else if (name.startsWith(query)) score = 100 - name.length;
+    else if (name.includes(query)) score = 60 - name.length;
+    else if (path.includes(query)) score = 50;
+    else if (n.id.toLowerCase().includes(query)) score = 30;
+    if (score >= 0) scored.push({ n, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  paletteState.items = scored.slice(0, 12).map(x => x.n);
+  paletteState.active = 0;
+  renderPaletteResults();
+}
+
+function renderPaletteResults() {
+  const wrap = document.getElementById("palette-results");
+  if (paletteState.items.length === 0) { wrap.innerHTML = `<div class="dash-empty">No matches.</div>`; return; }
+  wrap.innerHTML = paletteState.items.map((n, i) => `
+    <div class="palette-item ${i === paletteState.active ? 'active' : ''}" data-idx="${i}">
+      <span class="ptype">${pinnedIds.has(n.id) ? ICON_STAR_FILLED + " " : ""}${n.type.toLowerCase().replace(/_/g, " ")}</span>
+      <span class="pname">${escapeHtml(n.name)}</span>
+      <span class="pmeta">${escapeHtml((n.provenance?.file || "").split("/").pop() || "")}</span>
+    </div>`).join("");
+  wrap.querySelectorAll(".palette-item").forEach(item => {
+    item.addEventListener("click", () => choosePaletteItem(+item.dataset.idx));
+    item.addEventListener("mousemove", () => {
+      paletteState.active = +item.dataset.idx;
+      wrap.querySelectorAll(".palette-item").forEach((el, i) => el.classList.toggle("active", i === paletteState.active));
+    });
+  });
+}
+
+function choosePaletteItem(idx) {
+  const node = paletteState.items[idx];
+  if (!node) return;
+  closePalette();
+  // jump straight into the graph when the node is drawable there — the graph is home
+  switchTab("graph");
+  focusGraphNode(node.id);
+}
+
+document.getElementById("open-palette").addEventListener("click", openPalette);
+document.getElementById("palette-overlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("palette-overlay")) closePalette();
+});
+document.getElementById("palette-input").addEventListener("input", e => runPaletteSearch(e.target.value));
+document.getElementById("palette-input").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown") { e.preventDefault(); paletteState.active = Math.min(paletteState.active + 1, paletteState.items.length - 1); renderPaletteResults(); }
+  if (e.key === "ArrowUp") { e.preventDefault(); paletteState.active = Math.max(paletteState.active - 1, 0); renderPaletteResults(); }
+  if (e.key === "Enter") choosePaletteItem(paletteState.active);
+  if (e.key === "Escape") closePalette();
+});
+
+/* ============================== graph: data + physics ============================== */
+const STEREOTYPE_COLOR_VAR = {
+  controller: "--node-controller", service: "--node-service", repository: "--node-repository",
+  entity: "--node-entity", feignClient: "--node-external", component: "--node-config", configuration: "--node-config"
+};
+const TYPE_COLOR_VAR = {
+  EXTERNAL_SERVICE: "--node-external", FEIGN_CLIENT: "--node-external", DATABASE: "--node-external",
+  KAFKA_TOPIC: "--node-topic", QUEUE: "--node-topic", TABLE: "--node-entity",
+  ENDPOINT: "--accent", PACKAGE: "--node-config", CONFIG_PROPERTY: "--node-config"
+};
+function colorVarFor(node) {
+  return STEREOTYPE_COLOR_VAR[stereotypeOf(node)] || TYPE_COLOR_VAR[node.type] || "--node-plain";
+}
+
+/** Deterministic hue from a package name — same package always gets the same color across a
+ *  render, letting "package" color mode visually cluster architectural boundaries in a large
+ *  graph (the "zoom by package" level research consistently flags as missing from graph tools). */
+function packageHashColor(node) {
+  const pkg = (node.attributes && node.attributes.package) || "";
+  let hash = 0;
+  for (let i = 0; i < pkg.length; i++) hash = (hash * 31 + pkg.charCodeAt(i)) | 0;
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 58%, 58%)`;
+}
+
+function resolveNodeColor(styles, node) {
+  if (graphState.colorMode === "package" && node.attributes && node.attributes.package) {
+    return packageHashColor(node);
+  }
+  return styles.getPropertyValue(colorVarFor(node)).trim();
+}
+
+const RELEVANT_EDGE_TYPES = new Set(["INJECTS", "DEPENDS_ON", "PUBLISHES_TO", "LISTENS_TO", "MAPS_TO", "EXPOSES"]);
+const MAX_SIM_NODES = 170;
+
+function topLevelGraphNodes() {
+  return GRAPH_DATA.nodes.filter(n => {
+    const st = stereotypeOf(n);
+    return st && st !== "plain" || n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT"
+      || n.type === "KAFKA_TOPIC" || n.type === "QUEUE" || n.type === "TABLE" || n.type === "DATABASE"
+      || n.type === "ENDPOINT";
+  });
+}
+function scopedGraphNodes(scope) {
+  const all = topLevelGraphNodes();
+  if (scope === "controllers") return all.filter(n => ["controller", "service"].includes(stereotypeOf(n)) || n.type === "ENDPOINT");
+  if (scope === "services") return all.filter(n => ["service", "repository", "feignClient"].includes(stereotypeOf(n)) || n.type === "TABLE" || n.type === "EXTERNAL_SERVICE" || n.type === "DATABASE");
+  if (scope === "external") return all.filter(n => ["feignClient"].includes(stereotypeOf(n)) || n.type === "EXTERNAL_SERVICE" || n.type === "DATABASE" || n.type === "KAFKA_TOPIC" || n.type === "QUEUE" || stereotypeOf(n) === "service");
+  return all;
+}
+
+const sim = { nodes: [], edges: [], byId: new Map(), physicsEnabled: true, alpha: 1 };
+const graphState = {
+  scope: "all", offsetX: 0, offsetY: 0, scale: 1,
+  dragging: false, draggingNode: null, panLast: null,
+  hoverId: null, needsResize: true, focusId: null,
+  impactMode: false, impactDepth: 2, colorMode: "layer"
+};
+
+/**
+ * Traces the "blast radius" of a node through the visual (class-level, deduped) graph: what
+ * would be affected if you changed it (downstream — outgoing edges) and what depends on it
+ * (upstream — incoming edges), out to `depth` hops. This is the everyday-refactoring question
+ * ("what breaks if I touch this repository/service?") made visible without grepping the repo.
+ */
+function computeImpact(nodeId, depth) {
+  const downstream = new Set(), upstream = new Set();
+  const downstreamEdgeKeys = new Set(), upstreamEdgeKeys = new Set();
+  const edgeKey = e => e.source + ">" + e.target;
+
+  let frontier = [nodeId], visited = new Set([nodeId]), d = 0;
+  while (frontier.length && d < depth) {
+    const next = [];
+    for (const id of frontier) {
+      for (const e of sim.edges) {
+        if (e.source !== id) continue;
+        downstreamEdgeKeys.add(edgeKey(e));
+        if (!visited.has(e.target)) { visited.add(e.target); downstream.add(e.target); next.push(e.target); }
+      }
+    }
+    frontier = next; d++;
+  }
+
+  frontier = [nodeId]; visited = new Set([nodeId]); d = 0;
+  while (frontier.length && d < depth) {
+    const next = [];
+    for (const id of frontier) {
+      for (const e of sim.edges) {
+        if (e.target !== id) continue;
+        upstreamEdgeKeys.add(edgeKey(e));
+        if (!visited.has(e.source)) { visited.add(e.source); upstream.add(e.source); next.push(e.source); }
+      }
+    }
+    frontier = next; d++;
+  }
+
+  return { downstream, upstream, downstreamEdgeKeys, upstreamEdgeKeys };
+}
+const particles = [];
+
+/** Method-level facts (e.g. "OrderService.placeOrder publishes to topic X") are drawn at class
+ *  level in the graph view, since methods aren't rendered as nodes here. */
+function liftToClass(id) {
+  return id.startsWith("METHOD:") ? "CLASS:" + id.slice(7).split("#")[0] : id;
+}
+
+function buildGraphData() {
+  let scopedNodes = scopedGraphNodes(graphState.scope);
+  const idSet = new Set(scopedNodes.map(n => n.id));
+  let edges = GRAPH_DATA.edges
+    .filter(e => RELEVANT_EDGE_TYPES.has(e.type))
+    .map(e => ({ ...e, source: liftToClass(e.source), target: liftToClass(e.target) }))
+    .filter(e => e.source !== e.target && idSet.has(e.source) && idSet.has(e.target));
+  // several methods of one class hitting the same target collapse into one visual edge
+  const seen = new Set();
+  edges = edges.filter(e => {
+    const key = e.source + "|" + e.type + "|" + e.target;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (scopedNodes.length > MAX_SIM_NODES) {
+    const degree = new Map();
+    for (const e of edges) {
+      degree.set(e.source, (degree.get(e.source) || 0) + 1);
+      degree.set(e.target, (degree.get(e.target) || 0) + 1);
+    }
+    scopedNodes = [...scopedNodes].sort((a, b) => (degree.get(b.id) || 0) - (degree.get(a.id) || 0)).slice(0, MAX_SIM_NODES);
+    const keptIds = new Set(scopedNodes.map(n => n.id));
+    edges = edges.filter(e => keptIds.has(e.source) && keptIds.has(e.target));
+  }
+
+  const canvas = document.getElementById("graph-canvas");
+  const w = canvas.clientWidth || 900, h = canvas.clientHeight || 600;
+  const degree = new Map();
+  for (const e of edges) {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  }
+
+  sim.byId.clear();
+  // seed radius scales with node count so dense graphs start spread out rather than
+  // relying entirely on repulsion to un-clump hundreds of nodes from one small ring
+  const seedRadius = Math.max(Math.min(w, h) * 0.34, 40 * Math.sqrt(scopedNodes.length));
+  sim.nodes = scopedNodes.map((n, i) => {
+    const angle = (i / scopedNodes.length) * Math.PI * 2;
+    const radius = seedRadius;
+    const node = {
+      id: n.id, ref: n,
+      x: w / 2 + Math.cos(angle) * radius + (Math.random() - 0.5) * 50,
+      y: h / 2 + Math.sin(angle) * radius + (Math.random() - 0.5) * 50,
+      vx: 0, vy: 0, fx: null, fy: null,
+      degree: degree.get(n.id) || 0
+    };
+    sim.byId.set(n.id, node);
+    return node;
+  });
+  sim.edges = edges.map(e => ({ ...e, s: sim.byId.get(e.source), t: sim.byId.get(e.target) })).filter(e => e.s && e.t);
+  sim.alpha = 1;
+  particles.length = 0;
+
+  document.getElementById("graph-truncation-note")?.remove();
+  if (scopedNodes.length < scopedGraphNodes(graphState.scope).length) {
+    const note = document.createElement("div");
+    note.id = "graph-truncation-note";
+    note.textContent = `showing top ${scopedNodes.length} nodes by connectivity — use Ctrl K or Explorer for the rest`;
+    document.body.appendChild(note);
+  }
+}
+
+function nodeRadius(node) { return 4.5 + Math.min(10, Math.sqrt(node.degree) * 2); }
+
+function stepSimulation() {
+  const nodes = sim.nodes, n = nodes.length;
+  const canvas = document.getElementById("graph-canvas");
+  const w = canvas.clientWidth || 900, h = canvas.clientHeight || 600;
+
+  // Hard collision separation — runs regardless of alpha/physics-enabled state, so nodes are
+  // *guaranteed* never to sit on top of (or too near) each other, independent of how much the
+  // spring/repulsion forces have decayed. This is what actually keeps the layout spread out.
+  const PAD = 44;
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = nodes[j];
+      const minDist = nodeRadius(a) + nodeRadius(b) + PAD;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.hypot(dx, dy);
+      if (dist < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = 0.01; }
+      if (dist < minDist) {
+        const overlap = (minDist - dist) / 2;
+        const nx = dx / dist, ny = dy / dist;
+        if (a.fx === null) { a.x -= nx * overlap; a.y -= ny * overlap; }
+        if (b.fx === null) { b.x += nx * overlap; b.y += ny * overlap; }
+      }
+    }
+  }
+
+  if (!sim.physicsEnabled || sim.alpha <= 0.001) return;
+  // decays to a full stop — a settled layout should read as a static, deliberate diagram,
+  // not perpetual jitter; interactions (drag, re-layout, scope change) re-heat it briefly
+  sim.alpha *= 0.985;
+
+  const REPULSION = 15000, SPRING_LEN = 220, SPRING_K = 0.014, CENTER_K = 0.0012, DAMPING = 0.86;
+
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i];
+    if (a.fx !== null) continue;
+    let fx = 0, fy = 0;
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let distSq = dx * dx + dy * dy;
+      if (distSq < 1) distSq = 1;
+      const dist = Math.sqrt(distSq);
+      const force = (REPULSION * sim.alpha) / distSq;
+      fx += (dx / dist) * force;
+      fy += (dy / dist) * force;
+    }
+    fx += (w / 2 - a.x) * CENTER_K;
+    fy += (h / 2 - a.y) * CENTER_K;
+    a.vx = (a.vx + fx) * DAMPING;
+    a.vy = (a.vy + fy) * DAMPING;
+  }
+  for (const e of sim.edges) {
+    const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+    const dist = Math.max(1, Math.hypot(dx, dy));
+    const diff = (dist - SPRING_LEN) * SPRING_K * sim.alpha;
+    const nx = dx / dist, ny = dy / dist;
+    if (e.s.fx === null) { e.s.vx += nx * diff; e.s.vy += ny * diff; }
+    if (e.t.fx === null) { e.t.vx -= nx * diff; e.t.vy -= ny * diff; }
+  }
+  for (const a of nodes) {
+    if (a.fx !== null) { a.x = a.fx; a.y = a.fy; continue; }
+    a.x += a.vx; a.y += a.vy;
+  }
+}
+
+/* ============================== graph: rendering ============================== */
+function resizeCanvas() {
+  const canvas = document.getElementById("graph-canvas");
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+  canvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+  graphState.needsResize = false;
+}
+function worldToScreen(x, y) { return { x: x * graphState.scale + graphState.offsetX, y: y * graphState.scale + graphState.offsetY }; }
+function screenToWorld(x, y) { return { x: (x - graphState.offsetX) / graphState.scale, y: (y - graphState.offsetY) / graphState.scale }; }
+
+function edgeCurve(s1, s2) {
+  const mx = (s1.x + s2.x) / 2, my = (s1.y + s2.y) / 2;
+  const dx = s2.x - s1.x, dy = s2.y - s1.y;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  const off = dist * 0.12;
+  return { cx: mx - (dy / dist) * off, cy: my + (dx / dist) * off };
+}
+function pointOnQuad(s1, c, s2, t) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * s1.x + 2 * mt * t * c.cx + t * t * s2.x,
+    y: mt * mt * s1.y + 2 * mt * t * c.cy + t * t * s2.y
+  };
+}
+
+function spawnParticles() {
+  const activeId = graphState.hoverId || graphState.focusId;
+  if (activeId && particles.length < 90) {
+    for (const e of sim.edges) {
+      if (e.source !== activeId && e.target !== activeId) continue;
+      if (Math.random() < 0.3) particles.push({ e, t: 0, speed: 0.008 + Math.random() * 0.012, ambient: false });
+    }
+  }
+  // Ambient trickle: a light, continuous sense of data moving through the system even with
+  // nothing focused — this is the "live" cue, kept separate from node positions (which stay
+  // put) so the layout remains stable and readable while still feeling alive.
+  if (sim.edges.length && particles.length < 55 && Math.random() < 0.55) {
+    const e = sim.edges[Math.floor(Math.random() * sim.edges.length)];
+    particles.push({ e, t: 0, speed: 0.005 + Math.random() * 0.006, ambient: true });
+  }
+}
+function stepParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].t += particles[i].speed;
+    if (particles[i].t >= 1) particles.splice(i, 1);
+  }
+}
+
+function drawGraph() {
+  if (graphState.needsResize) resizeCanvas();
+  const canvas = document.getElementById("graph-canvas");
+  const ctx = canvas.getContext("2d");
+  const styles = getComputedStyle(document.documentElement);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const dark = isDarkTheme();
+
+  const bg = styles.getPropertyValue("--bg").trim();
+  const textColor = styles.getPropertyValue("--text-dim").trim();
+  const textFaint = styles.getPropertyValue("--text-faint").trim();
+  const accentColor = styles.getPropertyValue("--accent").trim();
+  const panelSolid = styles.getPropertyValue("--panel-solid").trim();
+  const nodeStroke = styles.getPropertyValue(dark ? "--bg" : "--panel-solid").trim();
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+
+  // two faint, static corner washes for depth — no animation, no parallax
+  const g1 = ctx.createRadialGradient(w * 0.1, 0, 0, w * 0.1, 0, w * 0.5);
+  g1.addColorStop(0, styles.getPropertyValue("--bg-glow-1").trim());
+  g1.addColorStop(1, "transparent");
+  ctx.fillStyle = g1;
+  ctx.fillRect(0, 0, w, h);
+  const g2 = ctx.createRadialGradient(w, h, 0, w, h, w * 0.5);
+  g2.addColorStop(0, styles.getPropertyValue("--bg-glow-2").trim());
+  g2.addColorStop(1, "transparent");
+  ctx.fillStyle = g2;
+  ctx.fillRect(0, 0, w, h);
+
+  // world-space dot grid — pans/zooms with the graph like a real canvas tool (Figma/Linear convention)
+  const gridSpacing = 42;
+  const step = gridSpacing * graphState.scale;
+  if (step > 10) {
+    const ox = ((graphState.offsetX % step) + step) % step;
+    const oy = ((graphState.offsetY % step) + step) % step;
+    ctx.fillStyle = textFaint;
+    ctx.globalAlpha = dark ? 0.28 : 0.4;
+    for (let gx = ox; gx < w; gx += step) {
+      for (let gy = oy; gy < h; gy += step) {
+        ctx.fillRect(gx - 0.6, gy - 0.6, 1.2, 1.2);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Depth-1 dimming always applies around a focused node; when Impact mode is on, the traced
+  // radius (and its directional coloring) extends to the chosen hop count instead.
+  const activeImpact = (graphState.focusId && sim.byId.has(graphState.focusId))
+    ? computeImpact(graphState.focusId, graphState.impactMode ? graphState.impactDepth : 1)
+    : null;
+  const focusNeighbors = activeImpact
+    ? new Set([graphState.focusId, ...activeImpact.downstream, ...activeImpact.upstream])
+    : null;
+  const impactColoring = graphState.impactMode ? activeImpact : null;
+
+  // edges: gradient strokes between endpoint colors
+  for (const e of sim.edges) {
+    const s1 = worldToScreen(e.s.x, e.s.y), s2 = worldToScreen(e.t.x, e.t.y);
+    if (Math.max(s1.x, s2.x) < -40 || Math.min(s1.x, s2.x) > w + 40 || Math.max(s1.y, s2.y) < -40 || Math.min(s1.y, s2.y) > h + 40) continue;
+    const c = edgeCurve(s1, s2);
+    const dim = focusNeighbors && !(focusNeighbors.has(e.source) && focusNeighbors.has(e.target));
+    const isActive = (graphState.hoverId && (e.source === graphState.hoverId || e.target === graphState.hoverId))
+      || (graphState.focusId && (e.source === graphState.focusId || e.target === graphState.focusId) && !dim);
+
+    let impactDir = null;
+    if (impactColoring && !dim && !isActive) {
+      const key = e.source + ">" + e.target;
+      if (impactColoring.downstreamEdgeKeys.has(key)) impactDir = "down";
+      else if (impactColoring.upstreamEdgeKeys.has(key)) impactDir = "up";
+    }
+
+    if (dim) {
+      ctx.strokeStyle = "rgba(120,130,145,0.05)";
+      ctx.lineWidth = 1;
+    } else if (isActive) {
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 1.8;
+    } else if (impactDir) {
+      ctx.strokeStyle = styles.getPropertyValue(impactDir === "down" ? "--impact-down" : "--impact-up").trim();
+      ctx.lineWidth = 1.6;
+    } else {
+      const sc = resolveNodeColor(styles, e.s.ref);
+      const tc = resolveNodeColor(styles, e.t.ref);
+      const grad = ctx.createLinearGradient(s1.x, s1.y, s2.x, s2.y);
+      grad.addColorStop(0, sc);
+      grad.addColorStop(1, tc);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1;
+    }
+    ctx.globalAlpha = dim ? 1 : (isActive || impactDir ? 0.95 : (dark ? 0.46 : 0.5));
+    ctx.beginPath();
+    ctx.moveTo(s1.x, s1.y);
+    ctx.quadraticCurveTo(c.cx, c.cy, s2.x, s2.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    if (!dim && graphState.scale > 0.45 && (isActive || impactDir || graphState.scale > 0.8)) {
+      const tEnd = 1 - (nodeRadius(e.t) * graphState.scale + 3) / Math.max(20, Math.hypot(s2.x - s1.x, s2.y - s1.y));
+      const tip = pointOnQuad(s1, c, s2, Math.max(0.5, tEnd));
+      const before = pointOnQuad(s1, c, s2, Math.max(0.4, tEnd - 0.05));
+      const angle = Math.atan2(tip.y - before.y, tip.x - before.x);
+      ctx.fillStyle = isActive ? accentColor
+        : impactDir ? styles.getPropertyValue(impactDir === "down" ? "--impact-down" : "--impact-up").trim()
+        : resolveNodeColor(styles, e.t.ref);
+      ctx.globalAlpha = (isActive || impactDir) ? 1 : 0.5;
+      ctx.beginPath();
+      ctx.moveTo(tip.x, tip.y);
+      ctx.lineTo(tip.x - 6.5 * Math.cos(angle - 0.42), tip.y - 6.5 * Math.sin(angle - 0.42));
+      ctx.lineTo(tip.x - 6.5 * Math.cos(angle + 0.42), tip.y - 6.5 * Math.sin(angle + 0.42));
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // flow particles — ambient dots trickle along random edges everywhere (the "live" cue),
+  // brighter accent-colored dots stream along whichever node is hovered/focused
+  for (const p of particles) {
+    const s1 = worldToScreen(p.e.s.x, p.e.s.y), s2 = worldToScreen(p.e.t.x, p.e.t.y);
+    const c = edgeCurve(s1, s2);
+    const pos = pointOnQuad(s1, c, s2, p.t);
+    const pulse = Math.sin(p.t * Math.PI);
+    if (p.ambient) {
+      ctx.fillStyle = resolveNodeColor(styles, p.e.t.ref);
+      ctx.globalAlpha = pulse * (dark ? 0.45 : 0.55);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = accentColor;
+      ctx.globalAlpha = pulse * 0.95;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // nodes: flat, crisp discs with a background-matched stroke for separation — a subtle glow
+  // ring is reserved for hover/focus only, so the resting state reads as a clean diagram
+  for (const node of sim.nodes) {
+    const s = worldToScreen(node.x, node.y);
+    if (s.x < -40 || s.x > w + 40 || s.y < -40 || s.y > h + 40) continue;
+    const dim = focusNeighbors && !focusNeighbors.has(node.id);
+    const r = Math.max(2.5, nodeRadius(node) * graphState.scale);
+    const color = resolveNodeColor(styles, node.ref);
+    const isHover = node.id === graphState.hoverId;
+    const isFocus = node.id === graphState.focusId;
+
+    if (!dim && (isHover || isFocus)) {
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.globalAlpha = dim ? 0.12 : 1;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, 1.4 * graphState.scale);
+    ctx.strokeStyle = nodeStroke;
+    ctx.stroke();
+
+    if (isFocus) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r + 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (impactColoring && !dim) {
+      const ringColor = impactColoring.downstream.has(node.id) ? "--impact-down"
+        : impactColoring.upstream.has(node.id) ? "--impact-up" : null;
+      if (ringColor) {
+        ctx.strokeStyle = styles.getPropertyValue(ringColor).trim();
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const showLabel = !dim && (isHover || isFocus || (graphState.scale > 0.65 && node.degree >= 1) || graphState.scale > 1.15);
+    if (showLabel) {
+      const label = truncate(node.ref.name, 24);
+      ctx.font = (isHover || isFocus) ? "600 11px " + "monospace" : "10px monospace";
+      const tw = ctx.measureText(label).width;
+      const lx = s.x + r + 5;
+      ctx.fillStyle = panelSolid;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(lx - 3, s.y - 8, tw + 8, 15, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = (isHover || isFocus) ? styles.getPropertyValue("--text").trim() : textColor;
+      ctx.fillText(label, lx, s.y + 3.5);
+    }
+  }
+}
+
+function renderLegend() {
+  const legend = document.getElementById("graph-legend");
+  if (graphState.colorMode === "package") {
+    legend.innerHTML = `<span class="item">colored by package — same hue = same package</span>`;
+    return;
+  }
+  const items = graphState.impactMode
+    ? [["--impact-up", "upstream (calls this)"], ["--impact-down", "downstream (this calls)"]]
+    : [
+        ["--node-controller", "controller"], ["--node-service", "service"], ["--node-repository", "repo"],
+        ["--accent", "endpoint"], ["--node-entity", "table"], ["--node-external", "external"], ["--node-topic", "topic"]
+      ];
+  legend.innerHTML = items.map(([c, l]) => `<span class="item"><span class="dot" style="background:var(${c});color:var(${c})"></span>${l}</span>`).join("");
+}
+
+/* ============================== graph: interaction ============================== */
+function nodeAt(mx, my) {
+  const world = screenToWorld(mx, my);
+  let closest = null, closestDist = Infinity;
+  for (const node of sim.nodes) {
+    const d = Math.hypot(node.x - world.x, node.y - world.y);
+    const hitRadius = nodeRadius(node) + 8 / graphState.scale;
+    if (d < hitRadius && d < closestDist) { closest = node; closestDist = d; }
+  }
+  return closest;
+}
+
+function fitToView() {
+  if (sim.nodes.length === 0) return;
+  const canvas = document.getElementById("graph-canvas");
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of sim.nodes) {
+    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
+    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
+  }
+  const gw = Math.max(1, maxX - minX), gh = Math.max(1, maxY - minY);
+  const scale = Math.min(2.5, Math.max(0.12, Math.min((w - 140) / gw, (h - 180) / gh)));
+  graphState.scale = scale;
+  graphState.offsetX = w / 2 - ((minX + maxX) / 2) * scale;
+  graphState.offsetY = h / 2 - ((minY + maxY) / 2) * scale;
+}
+
+/** Pans/zooms the camera to center a node already in the current sim scope, if present. */
+function panToNode(id) {
+  const target = sim.byId.get(id);
+  if (!target) return;
+  const canvas = document.getElementById("graph-canvas");
+  graphState.scale = Math.max(graphState.scale, 1.15);
+  graphState.offsetX = canvas.clientWidth / 2 - target.x * graphState.scale;
+  graphState.offsetY = canvas.clientHeight / 2 - target.y * graphState.scale;
+}
+
+function focusGraphNode(id) {
+  graphState.focusId = id;
+  if (!sim.byId.get(id)) {
+    graphState.scope = "all";
+    document.getElementById("graph-scope").value = "all";
+    buildGraphData();
+  }
+  if (sim.byId.get(id)) {
+    panToNode(id);
+    openDrawer(id);
+    updateHashForNode(id);
+  } else {
+    // not representable in the graph view (method/field/config) — show in explorer instead
+    switchTab("explorer");
+    selectNode(id);
+  }
+}
+
+/** Back/forward history of nodes opened in the graph drawer, so exploring via edge clicks
+ *  (which can wander several hops from where you started) doesn't strand you with no way back. */
+const drawerHistory = { stack: [], index: -1 };
+
+function openDrawer(id, opts = {}) {
+  graphState.focusId = id;
+  recordRecentlyViewed(id);
+  if (!opts.fromHistory) {
+    drawerHistory.stack = drawerHistory.stack.slice(0, drawerHistory.index + 1);
+    drawerHistory.stack.push(id);
+    drawerHistory.index = drawerHistory.stack.length - 1;
+  }
+  renderDrawerContent(id);
+  document.getElementById("graph-drawer").classList.add("open");
+  if (!opts.fromHistory) updateHashForNode(id);
+}
+
+function renderDrawerContent(id) {
+  document.getElementById("drawer-content").innerHTML = impactSummaryHtml(id) + buildDetailHtml(id, { showGraphJump: false });
+  wireDetailHandlers(document.getElementById("drawer-content"));
+  const backBtn = document.getElementById("drawer-back"), fwdBtn = document.getElementById("drawer-forward");
+  backBtn.disabled = drawerHistory.index <= 0;
+  fwdBtn.disabled = drawerHistory.index >= drawerHistory.stack.length - 1;
+}
+
+/** Re-renders the currently open drawer without touching history — used when impact-mode
+ *  settings change so the summary reflects the new depth/toggle immediately. */
+function refreshDrawerIfOpen() {
+  if (document.getElementById("graph-drawer").classList.contains("open") && graphState.focusId) {
+    renderDrawerContent(graphState.focusId);
+  }
+}
+
+function drawerGoBack() {
+  if (drawerHistory.index <= 0) return;
+  drawerHistory.index--;
+  const id = drawerHistory.stack[drawerHistory.index];
+  panToNode(id);
+  openDrawer(id, { fromHistory: true });
+}
+function drawerGoForward() {
+  if (drawerHistory.index >= drawerHistory.stack.length - 1) return;
+  drawerHistory.index++;
+  const id = drawerHistory.stack[drawerHistory.index];
+  panToNode(id);
+  openDrawer(id, { fromHistory: true });
+}
+document.getElementById("drawer-back").addEventListener("click", drawerGoBack);
+document.getElementById("drawer-forward").addEventListener("click", drawerGoForward);
+
+/** Small info block shown at the top of the drawer when Impact mode is active, summarizing the
+ *  blast radius of the focused node — the "what breaks if I change this" everyday question. */
+function impactSummaryHtml(nodeId) {
+  if (!graphState.impactMode) return "";
+  if (!sim.byId.has(nodeId)) {
+    return `<div class="impact-summary impact-na">Impact tracing isn't available for this node type in the graph view — see Explorer for its edges.</div>`;
+  }
+  const impact = computeImpact(nodeId, graphState.impactDepth);
+  const depthLabel = graphState.impactDepth >= 999 ? "all hops" : graphState.impactDepth + (graphState.impactDepth === 1 ? " hop" : " hops");
+  return `<div class="impact-summary">
+    <div class="impact-row"><span class="impact-dot up"></span>${impact.upstream.size} upstream — call${impact.upstream.size===1?"s":""} or depend${impact.upstream.size===1?"s":""} on this</div>
+    <div class="impact-row"><span class="impact-dot down"></span>${impact.downstream.size} downstream — what this calls or depends on</div>
+    <div class="impact-hint">within ${depthLabel}. Upstream is your blast radius if you change this; downstream is what it relies on.</div>
+  </div>`;
+}
+
+function closeDrawer() {
+  document.getElementById("graph-drawer").classList.remove("open");
+  graphState.focusId = null;
+}
+document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+
+/* ============================== shareable deep links ============================== */
+function updateHashForNode(id) {
+  try { history.replaceState(null, "", "#n=" + encodeURIComponent(id)); } catch (e) {}
+}
+function openFromHash() {
+  const m = location.hash.match(/^#n=(.+)$/);
+  if (!m) return;
+  const id = decodeURIComponent(m[1]);
+  if (!nodesById.has(id)) return;
+  if (sim.byId.has(id) || topLevelGraphNodes().some(n => n.id === id)) {
+    switchTab("graph");
+    focusGraphNode(id);
+  } else {
+    switchTab("explorer");
+    selectNode(id);
+  }
+}
+
+function animate() {
+  stepSimulation();
+  spawnParticles();
+  stepParticles();
+  drawGraph();
+  requestAnimationFrame(animate);
+}
+
+function initGraphInteraction() {
+  const canvas = document.getElementById("graph-canvas");
+  const tooltip = document.getElementById("graph-tooltip");
+
+  canvas.addEventListener("mousedown", e => {
+    const rect = canvas.getBoundingClientRect();
+    const hit = nodeAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (hit) {
+      graphState.draggingNode = hit;
+      hit.fx = hit.x; hit.fy = hit.y;
+      sim.alpha = Math.max(sim.alpha, 0.3);
+    } else {
+      graphState.dragging = true;
+      graphState.panLast = { x: e.clientX, y: e.clientY };
+    }
+    canvas.classList.add("grabbing");
+  });
+  window.addEventListener("mouseup", () => {
+    if (graphState.draggingNode) {
+      graphState.draggingNode.fx = null;
+      graphState.draggingNode.fy = null;
+      graphState.draggingNode = null;
+    }
+    graphState.dragging = false;
+    canvas.classList.remove("grabbing");
+  });
+  window.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (graphState.draggingNode) {
+      const world = screenToWorld(mx, my);
+      graphState.draggingNode.fx = world.x;
+      graphState.draggingNode.fy = world.y;
+      graphState.draggingNode.x = world.x;
+      graphState.draggingNode.y = world.y;
+      return;
+    }
+    if (graphState.dragging) {
+      graphState.offsetX += e.clientX - graphState.panLast.x;
+      graphState.offsetY += e.clientY - graphState.panLast.y;
+      graphState.panLast = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    const hit = nodeAt(mx, my);
+    if (hit) {
+      graphState.hoverId = hit.id;
+      const inC = (incoming.get(hit.id) || []).length, outC = (outgoing.get(hit.id) || []).length;
+      tooltip.style.display = "block";
+      tooltip.style.left = Math.min(mx + 14, rect.width - 340) + "px";
+      tooltip.style.top = (my + 14) + "px";
+      tooltip.innerHTML = `<div class="t">${hit.ref.type.toLowerCase().replace(/_/g, " ")}${stereotypeOf(hit.ref) ? " · " + stereotypeOf(hit.ref) : ""}</div>
+        <div>${escapeHtml(hit.ref.name)}</div>
+        <div style="color:var(--text-faint);font-size:10.5px;margin-top:3px">${inC} in · ${outC} out</div>`;
+    } else {
+      graphState.hoverId = null;
+      tooltip.style.display = "none";
+    }
+  });
+  canvas.addEventListener("click", () => {
+    if (graphState.draggingNode) return;
+    if (graphState.hoverId) {
+      openDrawer(graphState.hoverId);
+    } else {
+      closeDrawer();
+    }
+  });
+  canvas.addEventListener("dblclick", () => {
+    if (graphState.hoverId) {
+      closeDrawer();
+      switchTab("explorer");
+      selectNode(graphState.hoverId);
+    }
+  });
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const before = screenToWorld(mx, my);
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    graphState.scale = Math.max(0.1, Math.min(4, graphState.scale * factor));
+    const after = screenToWorld(mx, my);
+    graphState.offsetX += (after.x - before.x) * graphState.scale;
+    graphState.offsetY += (after.y - before.y) * graphState.scale;
+  }, { passive: false });
+
+  document.getElementById("graph-scope").addEventListener("change", e => {
+    graphState.scope = e.target.value;
+    closeDrawer();
+    buildGraphData();
+    requestAnimationFrame(fitToView);
+  });
+  document.getElementById("graph-reset").addEventListener("click", () => {
+    buildGraphData();
+    requestAnimationFrame(fitToView);
+  });
+  document.getElementById("graph-center").addEventListener("click", fitToView);
+  document.getElementById("graph-physics").addEventListener("change", e => {
+    sim.physicsEnabled = e.target.checked;
+    if (sim.physicsEnabled) sim.alpha = Math.max(sim.alpha, 0.3);
+  });
+  document.getElementById("impact-toggle").addEventListener("change", e => {
+    graphState.impactMode = e.target.checked;
+    document.getElementById("impact-depth").style.display = graphState.impactMode ? "" : "none";
+    renderLegend();
+    refreshDrawerIfOpen();
+  });
+  document.getElementById("impact-depth").addEventListener("change", e => {
+    graphState.impactDepth = +e.target.value;
+    refreshDrawerIfOpen();
+  });
+  document.getElementById("graph-color-mode").addEventListener("change", e => {
+    graphState.colorMode = e.target.value;
+    renderLegend();
+  });
+
+  const settingsBtn = document.getElementById("graph-settings-btn");
+  const settingsPopover = document.getElementById("graph-settings-popover");
+  settingsBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    settingsPopover.classList.toggle("open");
+  });
+  document.addEventListener("click", e => {
+    if (settingsPopover.classList.contains("open") && !settingsPopover.contains(e.target) && e.target !== settingsBtn) {
+      settingsPopover.classList.remove("open");
+    }
+  });
+
+  window.addEventListener("resize", () => { graphState.needsResize = true; });
+}
+
+/* ============================== onboarding ============================== */
+function openOnboarding() {
+  document.getElementById("onboarding-overlay").classList.add("open");
+}
+function closeOnboarding() {
+  document.getElementById("onboarding-overlay").classList.remove("open");
+  try { localStorage.setItem("cartograph-onboarded", "1"); } catch (e) {}
+}
+function initOnboarding() {
+  document.getElementById("onboarding-skip").addEventListener("click", closeOnboarding);
+  document.getElementById("onboarding-start").addEventListener("click", () => {
+    closeOnboarding();
+    switchTab("dashboard");
+  });
+  document.getElementById("onboarding-replay-btn").addEventListener("click", openOnboarding);
+  document.getElementById("onboarding-overlay").addEventListener("click", e => {
+    if (e.target.id === "onboarding-overlay") closeOnboarding();
+  });
+
+  let alreadySeen = false;
+  try { alreadySeen = localStorage.getItem("cartograph-onboarded") === "1"; } catch (e) {}
+  if (!alreadySeen && !location.hash) openOnboarding();
+}
+
+/* ============================== init ============================== */
+renderDashboard();
+renderGraphStats();
+renderTypeNav();
+renderNodeList();
+renderLegend();
+buildGraphData();
+initGraphInteraction();
+initOnboarding();
+window.addEventListener("hashchange", openFromHash);
+requestAnimationFrame(() => {
+  resizeCanvas();
+  fitToView();
+  openFromHash();
+  requestAnimationFrame(animate);
+});
+</script>
+</body>
+</html>
