@@ -296,6 +296,16 @@
   .hero .sub { color: var(--text-dim); font-size: 13.5px; margin-top: 6px; max-width: 62ch; line-height: 1.55; }
   .hero .meta { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); text-align: right; line-height: 1.8; white-space: nowrap; }
 
+  .plain-summary {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 22px; font-size: 14.5px; line-height: 1.75; color: var(--text-dim);
+  }
+  .plain-summary b { color: var(--text); font-weight: 600; }
+  .plain-summary .label {
+    display: block; font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--accent); margin-bottom: 9px;
+  }
+
   .layer-strip {
     display: flex; align-items: stretch; margin-bottom: 22px;
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -530,6 +540,35 @@
   .palette-footer { display: flex; gap: 14px; padding: 9px 16px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
   .palette-footer .kbd { border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin-right: 4px; }
 
+  /* onboarding walkthrough — first-visit orientation so the tool doesn't open on an
+     unexplained wall of graphs and jargon */
+  #onboarding-overlay {
+    position: fixed; inset: 0; z-index: 110; display: none;
+    background: rgba(4, 6, 9, 0.65); backdrop-filter: blur(5px);
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  #onboarding-overlay.open { display: flex; }
+  #onboarding-modal {
+    width: min(520px, 100%); max-height: 88vh; overflow-y: auto;
+    background: var(--panel-solid); border: 1px solid var(--border-bright);
+    border-radius: 16px; box-shadow: var(--shadow-lg); padding: 26px 28px;
+  }
+  .onboarding-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 10px; color: var(--text); }
+  .onboarding-intro { font-size: 13.5px; line-height: 1.65; color: var(--text-dim); margin-bottom: 18px; }
+  .onboarding-item { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+  .onboarding-item b { color: var(--text); }
+  .onboarding-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
+  .onboarding-item .kbd { border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-family: var(--mono); font-size: 11px; color: var(--text); }
+  .onboarding-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .onboarding-actions button {
+    font-family: var(--mono); font-size: 12.5px; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    background: var(--panel-raised); border: 1px solid var(--border); color: var(--text-dim);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .onboarding-actions button:hover { border-color: var(--border-bright); color: var(--text); }
+  .onboarding-actions button.primary { background: var(--accent); border-color: var(--accent); color: #0a0c10; font-weight: 600; }
+  .onboarding-actions button.primary:hover { opacity: 0.9; }
+
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 5px; }
@@ -560,6 +599,9 @@
   <button class="icon-btn" id="theme-toggle" title="Toggle light/dark theme">
     <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8"/></svg>
     <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>
+  </button>
+  <button class="icon-btn" id="onboarding-replay-btn" title="What am I looking at? (show the intro again)">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
   </button>
 </header>
 
@@ -651,6 +693,37 @@
       <span><span class="kbd">↑↓</span>navigate</span>
       <span><span class="kbd">↵</span>open</span>
       <span><span class="kbd">esc</span>close</span>
+    </div>
+  </div>
+</div>
+
+<div id="onboarding-overlay">
+  <div id="onboarding-modal">
+    <div class="onboarding-title">Welcome to Cartograph</div>
+    <div class="onboarding-intro">This is an automatically generated map of your codebase — built entirely from static analysis, so every fact here traces back to a real file and line, not a guess. Here's what each tab is for:</div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--accent)"></div>
+      <div><b>Dashboard</b> — start here. A plain-English summary of what this service does, its key numbers, and a health check flagging anything that looks off.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--node-service)"></div>
+      <div><b>Graph</b> — a visual, moving map of every class and how they connect. Click any node to inspect it; drag to pan, scroll to zoom.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--node-controller)"></div>
+      <div><b>API</b> — every REST endpoint, like a Swagger page, with real request/response examples and a "Copy as cURL" button.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--node-repository)"></div>
+      <div><b>Explorer</b> — a searchable list of literally everything: every class, method, config key, and table.</div>
+    </div>
+    <div class="onboarding-item">
+      <div class="onboarding-dot" style="background:var(--text-faint)"></div>
+      <div>Press <span class="kbd">Ctrl K</span> anytime, from anywhere, to jump straight to any class, endpoint, or config key by name.</div>
+    </div>
+    <div class="onboarding-actions">
+      <button id="onboarding-skip">Skip</button>
+      <button id="onboarding-start" class="primary">Take me to the Dashboard</button>
     </div>
   </div>
 </div>
@@ -774,6 +847,7 @@ window.addEventListener("keydown", e => {
   if (e.key === "3") switchTab("explorer");
   if (e.key === "4") switchTab("api");
   if (e.key === "Escape") {
+    if (document.getElementById("onboarding-overlay").classList.contains("open")) { closeOnboarding(); return; }
     if (paletteState.open) { closePalette(); return; }
     const popover = document.getElementById("graph-settings-popover");
     if (popover.classList.contains("open")) { popover.classList.remove("open"); return; }
@@ -946,6 +1020,44 @@ function renderInsightsHtml() {
   `;
 }
 
+/** A short, plain-English paragraph describing the service — the thing to read first, before
+ *  any graph or table, so someone unfamiliar with the codebase (or the tool) understands what
+ *  they're looking at in ten seconds instead of having to interpret diagrams and jargon. */
+function buildPlainEnglishSummary() {
+  const name = serviceName || "This service";
+  const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
+  const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
+  const endpoints = GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT");
+  const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
+  const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
+  const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+  const cycles = findCircularDependencies();
+  const violations = findLayeringViolations();
+  const leaks = findLeakyEntities();
+  const issueCount = cycles.length + violations.length + leaks.length;
+
+  const sentences = [];
+
+  sentences.push(endpoints.length
+    ? `<b>${escapeHtml(name)}</b> exposes <b>${endpoints.length}</b> REST endpoint${endpoints.length === 1 ? "" : "s"} across <b>${controllers.length}</b> controller${controllers.length === 1 ? "" : "s"}.`
+    : `<b>${escapeHtml(name)}</b> doesn't expose any REST endpoints that static analysis could detect.`);
+
+  if (services.length) sentences.push(`Its business logic lives in <b>${services.length}</b> service class${services.length === 1 ? "" : "es"}.`);
+  if (tables.length) sentences.push(`It persists data in <b>${tables.length}</b> database table${tables.length === 1 ? "" : "s"}.`);
+
+  if (externals.length) {
+    const names = externals.slice(0, 3).map(e => escapeHtml(e.name)).join(", ");
+    sentences.push(`It talks to <b>${externals.length}</b> external system${externals.length === 1 ? "" : "s"} (${names}${externals.length > 3 ? ", …" : ""}).`);
+  }
+  if (topics.length) sentences.push(`It exchanges messages through <b>${topics.length}</b> Kafka topic${topics.length === 1 ? "" : "s"}/queue${topics.length === 1 ? "" : "s"}.`);
+
+  sentences.push(issueCount === 0
+    ? `No architecture red flags were found — no circular dependencies, no layering violations, no leaked entities.`
+    : `<b>${issueCount}</b> potential architecture issue${issueCount === 1 ? "" : "s"} ${issueCount === 1 ? "was" : "were"} found — see "Architecture Insights" below.`);
+
+  return sentences.join(" ");
+}
+
 function renderDashboard() {
   const controllers = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "controller");
   const services = GRAPH_DATA.nodes.filter(n => stereotypeOf(n) === "service");
@@ -1036,6 +1148,10 @@ function renderDashboard() {
         </div>
         <button class="curl-btn" id="copy-ai-context-btn" title="Copy a full system summary formatted for pasting into an LLM chat">${ICON_MARKDOWN} Copy AI context</button>
       </div>
+    </div>
+    <div class="plain-summary">
+      <span class="label">In plain English</span>
+      ${buildPlainEnglishSummary()}
     </div>
     <div class="layer-strip">${layerHtml}</div>
     <div class="dash-columns">
@@ -2657,6 +2773,30 @@ function initGraphInteraction() {
   window.addEventListener("resize", () => { graphState.needsResize = true; });
 }
 
+/* ============================== onboarding ============================== */
+function openOnboarding() {
+  document.getElementById("onboarding-overlay").classList.add("open");
+}
+function closeOnboarding() {
+  document.getElementById("onboarding-overlay").classList.remove("open");
+  try { localStorage.setItem("cartograph-onboarded", "1"); } catch (e) {}
+}
+function initOnboarding() {
+  document.getElementById("onboarding-skip").addEventListener("click", closeOnboarding);
+  document.getElementById("onboarding-start").addEventListener("click", () => {
+    closeOnboarding();
+    switchTab("dashboard");
+  });
+  document.getElementById("onboarding-replay-btn").addEventListener("click", openOnboarding);
+  document.getElementById("onboarding-overlay").addEventListener("click", e => {
+    if (e.target.id === "onboarding-overlay") closeOnboarding();
+  });
+
+  let alreadySeen = false;
+  try { alreadySeen = localStorage.getItem("cartograph-onboarded") === "1"; } catch (e) {}
+  if (!alreadySeen && !location.hash) openOnboarding();
+}
+
 /* ============================== init ============================== */
 renderDashboard();
 renderGraphStats();
@@ -2665,6 +2805,7 @@ renderNodeList();
 renderLegend();
 buildGraphData();
 initGraphInteraction();
+initOnboarding();
 window.addEventListener("hashchange", openFromHash);
 requestAnimationFrame(() => {
   resizeCanvas();
