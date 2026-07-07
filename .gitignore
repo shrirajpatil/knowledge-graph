@@ -11,3 +11,4 @@ cartograph-output-*/
 .idea/
 *.iml
 .vscode/
+.claude/
