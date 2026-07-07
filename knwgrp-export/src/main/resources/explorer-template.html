@@ -495,6 +495,9 @@
   .api-endpoint-head:hover { background: var(--panel-raised); }
   .api-endpoint-head .path { font-family: var(--mono); font-size: 13px; color: var(--text); flex: 1; }
   .api-endpoint-head .chev { color: var(--text-faint); transition: transform 0.15s; flex-shrink: 0; }
+  .security-badge { display: flex; align-items: center; flex-shrink: 0; }
+  .security-badge.secured { color: var(--accent); }
+  .security-badge.unsecured { color: var(--warn); }
   .api-endpoint.open .chev { transform: rotate(90deg); }
   .api-endpoint-body { display: none; padding: 4px 14px 16px; border-top: 1px solid var(--border); }
   .api-endpoint.open .api-endpoint-body { display: block; }
@@ -762,6 +765,8 @@ const ICON_DOWNLOAD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="non
 const ICON_CLOCK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 const ICON_STAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
 const ICON_STAR_FILLED = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const ICON_LOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+const ICON_UNLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
 
 /** Best-effort "open in editor" deep link — works when VS Code is installed and its vscode:// protocol handler is registered (the common case for local dev). Absent repoRoot metadata (older exports), no link is offered. */
 function vscodeUri(provenance) {
@@ -943,12 +948,20 @@ function findHotspots(limit = 8) {
     .slice(0, limit);
 }
 
+/** Endpoints with no @PreAuthorize/@Secured/@RolesAllowed/@PermitAll detected at the method or
+ *  class level. This is a lead, not a verdict — a global security filter chain or API gateway
+ *  can enforce auth without any method-level annotation, which this can't see. */
+function findUnprotectedEndpoints() {
+  return GRAPH_DATA.nodes.filter(n => n.type === "ENDPOINT" && !n.attributes.securityRule);
+}
+
 function renderInsightsHtml() {
   const cycles = findCircularDependencies();
   const violations = findLayeringViolations();
   const leaks = findLeakyEntities();
   const dead = findUnreferencedComponents();
   const hotspots = findHotspots();
+  const unprotected = findUnprotectedEndpoints();
   const issueCount = cycles.length + violations.length + leaks.length;
 
   const cycleRows = cycles.length
@@ -991,6 +1004,14 @@ function renderInsightsHtml() {
       </div>`).join("")
     : `<div class="dash-empty">Not enough connections to rank.</div>`;
 
+  const unprotectedRows = unprotected.length
+    ? unprotected.map(ep => `<div class="dash-row" data-id="${escapeHtml(ep.id)}">
+        <span class="verb verb-${ep.attributes.httpMethod}">${ep.attributes.httpMethod}</span>
+        <span class="path">${escapeHtml(ep.attributes.path)}</span>
+        <span class="sub">no @PreAuthorize/@Secured found</span>
+      </div>`).join("")
+    : `<div class="dash-empty">Every endpoint has a method or class-level security annotation.</div>`;
+
   return `
     <div class="dash-section span-2">
       <h2><span class="dot" style="background:var(--danger);color:var(--danger)"></span>Architecture Insights <span class="count-pill">${issueCount} issue${issueCount === 1 ? "" : "s"}</span></h2>
@@ -1011,7 +1032,11 @@ function renderInsightsHtml() {
           <div class="insight-title">Unreferenced <span class="insight-caveat">— verify before removing, reflection/DI edge cases aren't visible here</span></div>
           <div class="dash-list">${deadRows}</div>
         </div>
-        <div class="insight-col span-2">
+        <div class="insight-col">
+          <div class="insight-title">Unprotected endpoints <span class="insight-caveat">— a filter chain or gateway may still enforce auth outside these annotations</span></div>
+          <div class="dash-list">${unprotectedRows}</div>
+        </div>
+        <div class="insight-col">
           <div class="insight-title">Most coupled classes</div>
           <div class="dash-list">${hotspotRows}</div>
         </div>
@@ -1031,6 +1056,7 @@ function buildPlainEnglishSummary() {
   const externals = GRAPH_DATA.nodes.filter(n => n.type === "EXTERNAL_SERVICE" || n.type === "FEIGN_CLIENT" || n.type === "DATABASE");
   const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
   const tables = GRAPH_DATA.nodes.filter(n => n.type === "TABLE");
+  const jobs = GRAPH_DATA.nodes.filter(n => n.type === "SCHEDULED_JOB");
   const cycles = findCircularDependencies();
   const violations = findLayeringViolations();
   const leaks = findLeakyEntities();
@@ -1050,6 +1076,7 @@ function buildPlainEnglishSummary() {
     sentences.push(`It talks to <b>${externals.length}</b> external system${externals.length === 1 ? "" : "s"} (${names}${externals.length > 3 ? ", …" : ""}).`);
   }
   if (topics.length) sentences.push(`It exchanges messages through <b>${topics.length}</b> Kafka topic${topics.length === 1 ? "" : "s"}/queue${topics.length === 1 ? "" : "s"}.`);
+  if (jobs.length) sentences.push(`It runs <b>${jobs.length}</b> background job${jobs.length === 1 ? "" : "s"} on a schedule.`);
 
   sentences.push(issueCount === 0
     ? `No architecture red flags were found — no circular dependencies, no layering violations, no leaked entities.`
@@ -1068,6 +1095,7 @@ function renderDashboard() {
   const topics = GRAPH_DATA.nodes.filter(n => n.type === "KAFKA_TOPIC" || n.type === "QUEUE");
   const configProps = GRAPH_DATA.nodes.filter(n => n.type === "CONFIG_PROPERTY");
   const classes = GRAPH_DATA.nodes.filter(n => n.type === "CLASS" || n.type === "INTERFACE");
+  const jobs = GRAPH_DATA.nodes.filter(n => n.type === "SCHEDULED_JOB");
 
   const layers = [
     { n: endpoints.length, l: "Endpoints", color: "--accent", type: "ENDPOINT" },
@@ -1108,6 +1136,13 @@ function renderDashboard() {
       <span class="path">${escapeHtml(n.name)}</span>
       <span class="sub">${(incoming.get(n.id)||[]).filter(e=>e.type==='PUBLISHES_TO').length} in · ${(outgoing.get(n.id)||[]).filter(e=>e.type==='LISTENS_TO').length} out</span>
     </div>`).join("") || `<div class="dash-empty">No messaging topics/queues detected.</div>`;
+
+  const jobRows = jobs.map(n => `
+    <div class="dash-row" data-id="${escapeHtml(n.id)}">
+      <span class="verb" style="color:var(--node-repository);background:color-mix(in srgb, var(--node-repository) 15%, transparent)">JOB</span>
+      <span class="path">${escapeHtml(n.name)}</span>
+      <span class="sub">${escapeHtml(n.attributes.schedule || "")}</span>
+    </div>`).join("") || `<div class="dash-empty">No @Scheduled background jobs detected.</div>`;
 
   const tableRows = tables.map(n => `
     <div class="dash-row" data-id="${escapeHtml(n.id)}">
@@ -1175,6 +1210,10 @@ function renderDashboard() {
       <div class="dash-section">
         <h2><span class="dot" style="background:var(--node-topic);color:var(--node-topic)"></span>Messaging <span class="count-pill">${topics.length}</span></h2>
         <div class="dash-list">${topicRows}</div>
+      </div>
+      <div class="dash-section">
+        <h2><span class="dot" style="background:var(--node-repository);color:var(--node-repository)"></span>Scheduled Jobs <span class="count-pill">${jobs.length}</span></h2>
+        <div class="dash-list">${jobRows}</div>
       </div>
       <div class="dash-section span-2">
         <h2><span class="dot" style="background:var(--node-entity);color:var(--node-entity)"></span>Database Tables <span class="count-pill">${tables.length}</span></h2>
@@ -1298,10 +1337,13 @@ function renderApiReference() {
 }
 
 function apiEndpointCardHtml(ep) {
+  const secured = !!ep.attributes.securityRule;
+  const securityBadge = `<span class="security-badge ${secured ? "secured" : "unsecured"}" title="${secured ? escapeHtml(ep.attributes.securityRule) : "No @PreAuthorize/@Secured/@RolesAllowed detected"}">${secured ? ICON_LOCK : ICON_UNLOCK}</span>`;
   return `<div class="api-endpoint" data-id="${escapeHtml(ep.id)}">
     <div class="api-endpoint-head">
       <span class="verb verb-${ep.attributes.httpMethod}">${ep.attributes.httpMethod}</span>
       <span class="path">${escapeHtml(ep.attributes.path)}</span>
+      ${securityBadge}
       <span class="chev">${ICON_CHEVRON}</span>
     </div>
     <div class="api-endpoint-body"></div>
@@ -1374,6 +1416,10 @@ function buildApiEndpointBody(id) {
     ? `<div class="api-endpoint-desc">${escapeHtml(methodNode.attributes.javadoc)}</div>` : "";
   const trace = requestTraceHtml(node);
   const api = apiSchemaHtml(node);
+  const securityLine = `<div class="api-endpoint-meta" style="margin-top:0">
+    <span class="security-badge ${node.attributes.securityRule ? "secured" : "unsecured"}">${node.attributes.securityRule ? ICON_LOCK : ICON_UNLOCK}</span>
+    <span>${node.attributes.securityRule ? escapeHtml(node.attributes.securityRule) : "No security annotation detected — may be enforced elsewhere"}</span>
+  </div>`;
   const meta = `<div class="api-endpoint-meta">
     <span>${escapeHtml(node.attributes.handlerClass || "")}.${escapeHtml(node.attributes.handlerMethod || "")}()</span>
     ${node.provenance ? `<span>${escapeHtml(node.provenance.file)}:${node.provenance.line}</span>` : ""}
@@ -1381,7 +1427,7 @@ function buildApiEndpointBody(id) {
   const actions = `<div class="detail-actions" style="margin-top:12px">
     <button data-action="show-in-graph" data-id="${escapeHtml(id)}">${ICON_GRAPH} Show in graph</button>
   </div>`;
-  return desc + trace + api + meta + actions;
+  return desc + securityLine + trace + api + meta + actions;
 }
 
 function wireApiHandlers() {
@@ -1739,7 +1785,7 @@ function buildDetailHtml(id, opts = {}) {
   if (!node) return `<div class="placeholder">Node not found.</div>`;
 
   const hiddenAttrKeys = new Set(["lastModifiedBy", "lastModifiedDate"]);
-  if (node.type === "ENDPOINT") ["parameters", "requestBodyType", "pathParams", "queryParams"].forEach(k => hiddenAttrKeys.add(k));
+  if (node.type === "ENDPOINT") ["parameters", "requestBodyType", "pathParams", "queryParams", "securityRule"].forEach(k => hiddenAttrKeys.add(k));
   const attrs = Object.entries(node.attributes || {})
     .filter(([k, v]) => !hiddenAttrKeys.has(k) && v !== null && v !== undefined && String(v).length > 0)
     .map(([k, v]) => `<div class="attr-row"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(Array.isArray(v) ? v.join(", ") : v)}</span></div>`)

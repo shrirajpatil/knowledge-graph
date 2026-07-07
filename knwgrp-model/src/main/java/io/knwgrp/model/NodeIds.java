@@ -61,4 +61,8 @@ public final class NodeIds {
     public static String forDatabase(String name) {
         return "DB:" + name;
     }
+
+    public static String forScheduledJob(String fullyQualifiedClassName, String methodName) {
+        return "JOB:" + fullyQualifiedClassName + "#" + methodName;
+    }
 }

@@ -17,7 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Re-walks source files for classes tagged {@code springStereotype=controller} (by
@@ -88,16 +87,17 @@ public class EndpointExtractor implements Extractor {
                         ? List.of(joinPath(classPath, ""))
                         : methodPaths.stream().map(mp -> joinPath(classPath, mp)).toList();
 
+                String securityRule = securityRuleFor(type, method);
                 for (String httpMethod : httpMethods) {
                     for (String fullPath : fullPaths) {
-                        createEndpoint(context, httpMethod, fullPath, method, relativePath, controllerNode);
+                        createEndpoint(context, httpMethod, fullPath, method, relativePath, controllerNode, securityRule);
                     }
                 }
             }
         }
     }
 
-    private void createEndpoint(AnalysisContext context, String httpMethod, String path, MethodDeclaration method, String relativePath, Node controllerNode) {
+    private void createEndpoint(AnalysisContext context, String httpMethod, String path, MethodDeclaration method, String relativePath, Node controllerNode, String securityRule) {
         String endpointId = NodeIds.forEndpoint(httpMethod, path);
 
         String requestBodyType = null;
@@ -125,6 +125,7 @@ public class EndpointExtractor implements Extractor {
                 .withAttribute("pathParams", pathParams)
                 .withAttribute("queryParams", queryParams)
                 .withAttribute("returnType", method.getTypeAsString())
+                .withAttribute("securityRule", securityRule)
                 .withProvenance(Provenance.of(relativePath, method.getBegin().map(p -> p.line).orElse(-1), name()));
 
         context.graph().addNode(endpointNode);
@@ -218,6 +219,44 @@ public class EndpointExtractor implements Extractor {
                 extractStringValues(e, out);
             }
         }
+    }
+
+    /** Method-level security annotation wins; falls back to the class-level one (a common
+     *  pattern where a controller is annotated once and individual handlers inherit it).
+     *  Returns {@code null} when neither is present — the caller treats that as "unprotected
+     *  at the method-annotation level," which callers should read as a lead to check, not a
+     *  verdict: security may still be enforced elsewhere (a filter chain, an API gateway). */
+    private String securityRuleFor(TypeDeclaration<?> type, MethodDeclaration method) {
+        String methodRule = securityRuleFromAnnotations(method.getAnnotations());
+        return methodRule != null ? methodRule : securityRuleFromAnnotations(type.getAnnotations());
+    }
+
+    private String securityRuleFromAnnotations(List<AnnotationExpr> annotations) {
+        for (AnnotationExpr ann : annotations) {
+            String annName = ann.getNameAsString();
+            if (annName.equals("PermitAll")) {
+                return "permitAll";
+            }
+            if (annName.equals("PreAuthorize") && ann instanceof SingleMemberAnnotationExpr single) {
+                return "@PreAuthorize(" + literalOrRaw(single.getMemberValue()) + ")";
+            }
+            if (annName.equals("Secured") || annName.equals("RolesAllowed")) {
+                List<String> roles = new ArrayList<>();
+                if (ann instanceof SingleMemberAnnotationExpr single) {
+                    extractStringValues(single.getMemberValue(), roles);
+                } else if (ann instanceof NormalAnnotationExpr normal) {
+                    for (MemberValuePair pair : normal.getPairs()) {
+                        if (pair.getNameAsString().equals("value")) extractStringValues(pair.getValue(), roles);
+                    }
+                }
+                return "@" + annName + "(" + String.join(", ", roles) + ")";
+            }
+        }
+        return null;
+    }
+
+    private String literalOrRaw(Expression expr) {
+        return expr instanceof StringLiteralExpr s ? s.asString() : expr.toString();
     }
 
     private String joinPath(String classPath, String methodPath) {

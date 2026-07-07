@@ -50,7 +50,9 @@ public class AnalyzeCommand implements Callable<Integer> {
                 .addExtractor(new FeignClientExtractor())
                 .addExtractor(new KafkaExtractor())
                 .addExtractor(new RestClientExtractor())
-                .addExtractor(new RedisExtractor());
+                .addExtractor(new RedisExtractor())
+                .addExtractor(new ScheduledJobExtractor())
+                .addExtractor(new ConfigUsageExtractor());
 
         Path absoluteRepoRoot = repoPath.toAbsolutePath().normalize();
         KnowledgeGraph graph = pipeline.run(absoluteRepoRoot);
